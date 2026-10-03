@@ -60,41 +60,26 @@ SWIGGY_APP_HEADERS = {
     "model-name": "MOTO G(60)",
 }
 
-# 📍 EXTENSIVE PAN-INDIA HOTSPOTS (High Density Zones)
 ALL_AREAS = [
     ("Delhi - CP", 28.6315, 77.2167),
     ("Delhi - Saket", 28.5245, 77.2066),
     ("Delhi - Hauz Khas", 28.5433, 77.2066),
     ("Delhi - Karol Bagh", 28.6519, 77.1909),
-    ("Delhi - Laxmi Nagar", 28.6300, 77.2430),
     ("Noida - Sec 18", 28.5698, 77.3200),
     ("Gurgaon - CyberHub", 28.4950, 77.0895),
     ("Bengaluru - Koramangala", 12.9352, 77.6245),
     ("Bengaluru - Indiranagar", 12.9784, 77.6408),
     ("Bengaluru - HSR", 12.9121, 77.6446),
-    ("Bengaluru - Whitefield", 12.9698, 77.7499),
     ("Mumbai - Bandra", 19.0596, 72.8295),
     ("Mumbai - Andheri", 19.1136, 72.8697),
     ("Mumbai - Powai", 19.1176, 72.9060),
-    ("Mumbai - Colaba", 18.9067, 72.8147),
     ("Pune - Hinjewadi", 18.5912, 73.7389),
     ("Pune - Viman Nagar", 18.5679, 73.9143),
-    ("Pune - Koregaon Park", 18.5362, 73.8939),
     ("Hyderabad - Hitec City", 17.4435, 78.3772),
     ("Hyderabad - Jubilee Hills", 17.4326, 78.4071),
-    ("Hyderabad - Ameerpet", 17.4375, 78.4482),
     ("Chennai - T Nagar", 13.0418, 80.2341),
-    ("Chennai - Velachery", 12.9815, 80.2180),
     ("Kolkata - Park Street", 22.5526, 88.3539),
-    ("Kolkata - Salt Lake", 22.5864, 88.4006),
     ("Ahmedabad - SG Highway", 23.0225, 72.5714),
-    ("Ahmedabad - Navrangpura", 23.0365, 72.5611),
-    ("Jaipur - Malviya Nagar", 26.9124, 75.7873),
-    ("Lucknow - Gomti Nagar", 26.8467, 80.9462),
-    ("Chandigarh - Sector 17", 30.7333, 76.7794),
-    ("Indore - Vijay Nagar", 22.7196, 75.8577),
-    ("Bhopal - MP Nagar", 23.2599, 77.4126),
-    ("Patna - Boring Road", 25.6093, 85.1158),
 ]
 
 # ── SAVED ACCOUNTS SYSTEM ────────────────────────────────────────────────────
@@ -181,7 +166,7 @@ def parse_session_string(raw: str) -> dict:
 
 def get_cancel_button(): return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data="cancel_current_task")]])
 
-# ── FEATURE: DYNAMIC DISCOVER & LOOT (INDIA-WISE TRACKING) ───────────────────
+# ── FEATURE: SUPERFAST DISCOVER & LOOT ───────────────────────────────────────
 async def discover_live_users(session_data: dict, lat: float, lng: float, client: aiohttp.ClientSession, seen: list):
     payload = {"location": {"latitude": lat, "longitude": lng}, "tid": str(session_data.get("tid", "")), "previousNearbyUserIds": seen or [], "campaignId": DEFAULT_CAMPAIGN_ID, "userId": str(session_data.get("userid", "")), "isFreshLocation": True}
     try:
@@ -207,59 +192,51 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
     context.user_data["is_running"], context.user_data["cancel_requested"] = True, False
     joined_count, fail_count, tried_ids, summary_lines = 0, 0, set(), []
     
-    # Dynamic Scoring for India-wide optimization
-    area_scores = {area[0]: 10.0 for area in ALL_AREAS}
     active_areas = list(ALL_AREAS)
     random.shuffle(active_areas)
     
     start_time = time.time()
     last_update_time = 0
     live_action = "Warming up scanner..."
-    current_zone = "Initializing..."
 
     try:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
             while joined_count < TARGET_SUCCESS_COUNT:
                 if context.user_data.get("cancel_requested"): break
                 
-                # Sort areas by score so we hit the most active India zones first
-                active_areas.sort(key=lambda a: area_scores.get(a[0], 0), reverse=True)
-                
                 for i in range(0, len(active_areas), 8):
                     if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
                     batch = active_areas[i:i+8]
                     
-                    # Update Progress and ETA UI
                     if time.time() - last_update_time > 2.0:
                         try:
+                            zones = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
+                            
+                            # Estimate Time Calculation
                             elapsed = time.time() - start_time
                             eta_str = "Calculating..."
                             if joined_count > 0:
                                 eta_secs = int((elapsed / joined_count) * (TARGET_SUCCESS_COUNT - joined_count))
                                 eta_str = f"~{eta_secs}s"
                                 
+                            # Progress Bar
                             progress_blocks = int((joined_count / TARGET_SUCCESS_COUNT) * 10)
                             bar = f"[{'█' * progress_blocks}{'░' * (10 - progress_blocks)}]"
-                            
-                            top_cities = sorted(area_scores.items(), key=lambda x: x[1], reverse=True)
-                            hot_zones = ", ".join([k.split(" - ")[0] for k, v in top_cities[:3]])
-                            
-                            current_zone = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
 
-                            ui_text = (
-                                f"🚀 *SUPERFAST LOOT ENGINE* 🚀\n\n"
+                            await status_msg.edit_text(
+                                f"🚀 *Superfast Loot Engine* 🚀\n\n"
                                 f"📊 *Progress:* `{bar}` *{joined_count}/{TARGET_SUCCESS_COUNT}*\n"
-                                f"⏱️ *Estimated Time:* `{eta_str}`\n\n"
-                                f"📍 *Live Tracking:* Scanning `{current_zone}`...\n"
-                                f"🔥 *Most Active India Zones:* `{hot_zones}`\n"
-                                f"📡 *Total Radared:* `{len(tried_ids)} Users`\n"
-                                f"❌ *Bypassed (Already Looted):* `{fail_count}`\n\n"
-                                f"👁️ *Status:* `{live_action}`"
+                                f"⏱️ *ETA:* `{eta_str}`\n\n"
+                                f"📍 *Radar:* `{zones}...`\n"
+                                f"❌ *Bypassed:* `{fail_count}`\n"
+                                f"📡 *Scanned:* `{len(tried_ids)}`\n\n"
+                                f"👁️ *Live Action:* `{live_action}`",
+                                reply_markup=get_cancel_button(), parse_mode="Markdown"
                             )
-                            await status_msg.edit_text(ui_text, reply_markup=get_cancel_button(), parse_mode="Markdown")
                             last_update_time = time.time()
                         except: pass
 
+                    # DYNAMIC JITTER
                     jitter_tasks = []
                     for city_data in batch:
                         j_lat = city_data[1] + random.uniform(-0.035, 0.035)
@@ -271,20 +248,10 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
 
                     for (city, j_lat, j_lng), res in zip(jitter_tasks, results):
                         if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
-                        
-                        if isinstance(res, Exception) or not res[0]: 
-                            area_scores[city] = max(1.0, area_scores.get(city, 10.0) - 1.0) # Penalty for no users
-                            continue
+                        if isinstance(res, Exception) or not res[0]: continue
 
                         new_users = [u for u in res[0] if str(u.get("userId", "")) not in tried_ids]
                         
-                        if not new_users:
-                            area_scores[city] = max(1.0, area_scores.get(city, 10.0) - 0.5)
-                            continue
-                            
-                        # Boost score if users found
-                        area_scores[city] = area_scores.get(city, 10.0) + (len(new_users) * 0.5)
-
                         for u in new_users:
                             if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
                             uid, name = str(u.get("userId") or ""), str(u.get("userName") or "User")
@@ -295,13 +262,12 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                                 live_action = f"Skipping {name} (Already Looted)"
                                 continue
 
-                            live_action = f"Locking offer for {name} in {city}..."
+                            live_action = f"Locking offer for {name} in {city.split(' - ')[0]}..."
                             ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
                             if ok:
                                 joined_count += 1
-                                area_scores[city] += 5.0 # High boost for success
                                 live_action = f"🎯 YES! Looted from {name}!"
-                                summary_lines.append(f"✅ `{name}` ({city.split(' - ')[0]})")
+                                summary_lines.append(f"✅ `{name}`")
                             else:
                                 fail_count += 1
                                 live_action = f"Failed for {name}: {note}"
