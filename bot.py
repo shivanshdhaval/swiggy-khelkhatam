@@ -52,19 +52,12 @@ BOT_TOKEN = "8918993850:AAG-svWDI3GFH1b0cDuozIH-UHlvvgj1QWY"
 SMS_OTP_URL = "https://profile.swiggy.com/api/v3/app/sms_otp"
 VERIFY_URL = "https://profile.swiggy.com/api/v3/app/login/verify"
 EVENTS_HOST = "https://events.swiggy.com"
-NOTIFY_URL = f"{EVENTS_HOST}/api/notify"
-PYO_COUPON_URL = f"{EVENTS_HOST}/api/pick-your-offer-coupon"
-BYO_COUPON_URL = f"{EVENTS_HOST}/api/book-your-offer-coupon"
-NYO_COUPON_URL = f"{EVENTS_HOST}/api/pick-your-late-night-offer-coupon"
-BYO_PAGE_URL = f"{EVENTS_HOST}/book-your-offer?utm_source=app&utm_medium=share"
-NYO_PAGE_URL = f"{EVENTS_HOST}/pick-your-late-night-offer"
-
 SPNS_BASE_URL = "https://spns.swiggy.com"
 CREATE_OFFERS_PATH = "/api/v1/proximity-offer/create-offers"
 DISCOVER_USERS_PATH = "/api/v1/proximity-offer/discover-users"
 TRANSACTIONS_PATH = "/api/v1/proximity-offer/campaigns/{campaign_id}/transactions"
 
-# Handles Cashloot, Breakfast, Morning Loot, and generic referral links
+# Handles Cashloot, Morning Loot, and generic referral links
 SWIGGY_LINK_RE = re.compile(
     r"r\.swiggy\.com/(?:cashloot|breakfast|breakfastloot|morningloot|offer|loot)/([A-Za-z0-9_-]+)",
     re.IGNORECASE
@@ -85,19 +78,6 @@ SWIGGY_APP_HEADERS = {
     "app-version": "4.113.0",
     "manufacturer": "MOTOROLA",
     "model-name": "MOTO G(60)",
-}
-
-NIGHT_OFFERS = {
-    1: {"title": "₹50 FREE Cash", "desc": "On order above ₹199", "tag": "Free Cash"},
-    2: {"title": "₹150 OFF Coupon", "desc": "On order above ₹249", "tag": "Coupon"},
-    3: {"title": "₹100 OFF + ₹50 Cash", "desc": "On order above ₹249", "tag": "Coupon & Cash"},
-    4: {"title": "₹100 OFF Coupon", "desc": "On order above ₹149", "tag": "Coupon"},
-}
-BREAKFAST_OFFERS = {
-    1: {"title": "₹50 FREE Cash", "desc": "On order above ₹199", "tag": "Free Cash"},
-    2: {"title": "₹150 OFF Coupon", "desc": "On order above ₹249", "tag": "Coupon"},
-    3: {"title": "₹100 OFF + ₹50 Cash", "desc": "On order above ₹249", "tag": "Coupon & Cash"},
-    4: {"title": "₹100 OFF Coupon", "desc": "On order above ₹149", "tag": "Coupon"},
 }
 
 ALL_AREAS = [
@@ -296,38 +276,6 @@ def get_cancel_button():
         [InlineKeyboardButton("🛑 Stop / Cancel", callback_data="cancel_current_task")]
     ])
 
-
-def get_night_options_markup():
-    keyboard = [
-        [
-            InlineKeyboardButton("🍔 ₹50 FREE Cash (>₹199)", callback_data="nyo_opt_1"),
-            InlineKeyboardButton("🍕 ₹150 OFF (>₹249)", callback_data="nyo_opt_2"),
-        ],
-        [
-            InlineKeyboardButton("🍟 ₹100 OFF + ₹50 Cash", callback_data="nyo_opt_3"),
-            InlineKeyboardButton("🥤 ₹100 OFF (>₹149)", callback_data="nyo_opt_4"),
-        ],
-        [
-            InlineKeyboardButton("🔙 Back to Main Menu", callback_data="menu_restart"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-def get_breakfast_options_markup():
-    keyboard = [
-        [
-            InlineKeyboardButton("🎁 ₹50 FREE Cash (>₹199)", callback_data="byo_opt_1"),
-            InlineKeyboardButton("🏷️ ₹150 OFF (>₹249)", callback_data="byo_opt_2"),
-        ],
-        [
-            InlineKeyboardButton("💰 ₹100 OFF + ₹50 Cash", callback_data="byo_opt_3"),
-            InlineKeyboardButton("🎟️ ₹100 OFF (>₹149)", callback_data="byo_opt_4"),
-        ],
-        [
-            InlineKeyboardButton("🔙 Back to Main Menu", callback_data="menu_restart"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
 # ── FEATURE 1: DISCOVER & LOOT (10 SUCCESSFUL LIVE USERS) ────────────────────
 async def discover_live_users(session_data: dict, lat: float, lng: float, campaign_id: str, client: aiohttp.ClientSession, seen: list):
@@ -587,413 +535,6 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
         pass
 
 
-# ── FEATURE 2: PICK YOUR BREAKFAST OFFER ─────────────────────────────────────
-async def request_single_breakfast_lock(session_data: dict, offer_index: int, client: aiohttp.ClientSession):
-    device_id = get_random_device_id()
-    token = str(session_data.get("token", "")).strip()
-    tid = str(session_data.get("tid", "")).strip()
-    sid = str(session_data.get("sid", "")).strip()
-    uid = str(session_data.get("userid", "")).strip()
-
-    page_headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 4 Build/RD2A.211001.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.120 Mobile Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Content-Type": "application/json",
-        "platform": "Swiggy-Android",
-        "version-code": "1795",
-        "model-name": "PIXEL 4",
-        "manufacturer": "GOOGLE",
-        "application_name": "swiggy-app",
-        "appversion": "4.113.0",
-        "Origin": EVENTS_HOST,
-        "Referer": BYO_PAGE_URL,
-        "deviceId": device_id,
-        "swuid": device_id,
-        "token": token,
-        "tid": tid,
-        "userid": uid,
-        "sessionid": sid,
-        "Cookie": f"token={token}; tid={tid}; sid={sid}; user_id={uid}; _session_id={sid}",
-    }
-
-    last_error = "The offer slot is currently locked/inactive for this account by Swiggy server."
-
-    endpoints = [
-        f"{EVENTS_HOST}/api/book-your-offer-coupon",
-        f"{EVENTS_HOST}/api/book-your-offer",
-        f"{EVENTS_HOST}/api/pick-your-offer-coupon"
-    ]
-    for url in endpoints:
-        try:
-            async with client.post(
-                url,
-                headers=page_headers,
-                json={"campaign": "book-your-offer", "offerIndex": offer_index},
-                timeout=aiohttp.ClientTimeout(total=6)
-            ) as resp:
-                if resp.status == 404:
-                    continue
-                text = await resp.text()
-                try:
-                    d = json.loads(text)
-                    inner = d.get("data", {})
-                    if inner.get("end_date"):
-                        return True, f"Breakfast Offer Locked! (Valid till {inner.get('end_date')})"
-                    msg = d.get("statusMessage") or d.get("message")
-                    if msg:
-                        if "SUCCESS" in msg.upper():
-                            return True, msg
-                        last_error = str(msg)
-                except Exception:
-                    if resp.status == 200 and not text.strip().startswith("<"):
-                        return True, "Offer Locked Successfully!"
-                    elif resp.status != 200:
-                        last_error = f"Events API Error: HTTP {resp.status}"
-                if resp.status != 404:
-                    break
-        except Exception as e:
-            last_error = str(e)
-
-    headers = build_spns_headers(session_data)
-    spns_payload = {
-        "campaignId": "book-your-offer",
-        "senderUserId": uid,
-        "senderLocation": {"latitude": 28.6315, "longitude": 77.2167},
-        "isReferralFlow": False,
-        "offerIndex": offer_index,
-        "receivers": [{"userId": uid}],
-    }
-    try:
-        async with client.post(
-            SPNS_BASE_URL + CREATE_OFFERS_PATH,
-            headers=headers,
-            json=spns_payload,
-            timeout=aiohttp.ClientTimeout(total=8)
-        ) as resp:
-            data = await resp.json(content_type=None)
-            if isinstance(data, dict):
-                inner = data.get("data") if isinstance(data.get("data"), dict) else {}
-                results = inner.get("receiverResults") if isinstance(inner.get("receiverResults"), list) else []
-                for res in results:
-                    for bl, off in (res.get("offersByBL") or {}).items():
-                        if off.get("status") == "SUCCESS":
-                            val = _parse_amount(off.get("offerValue"))
-                            return True, f"Breakfast Offer Locked! (Rs.{val:.0f} via {bl})"
-                        else:
-                            err = off.get("errorCode") or "Already claimed or slot locked"
-                            if "Error creating offers" not in str(err) and "Missing headers" not in str(err):
-                                last_error = str(err)
-                msg = data.get("statusMessage")
-                if msg and "Error creating offers" not in str(msg) and "Missing headers" not in str(msg):
-                    last_error = str(msg)
-    except Exception:
-        pass
-
-    if "Error creating offers" in last_error or "Missing headers" in last_error:
-        last_error = "Account not eligible or offer exhausted for today."
-
-    return False, last_error
-
-
-async def run_single_breakfast_offer(session_data: dict, offer_index: int, status_msg, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["is_running"] = True
-    context.user_data["cancel_requested"] = False
-    try:
-        offer_info = BREAKFAST_OFFERS.get(offer_index, {"title": f"Option {offer_index}", "desc": ""})
-        connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as client:
-            await status_msg.edit_text(
-                f"🍳 *Claiming Breakfast Offer...*\n\n"
-                f"🎁 *Deal:* `{offer_info['title']}`\n"
-                f"📝 *Details:* {offer_info['desc']}\n"
-                f"🎯 *Attempt:* `1/1` (Single Try)\n"
-                f"🔗 *Page:* `book-your-offer`",
-                parse_mode="Markdown"
-            )
-
-            ok, note = await request_single_breakfast_lock(session_data, offer_index, client)
-
-            res = "🧾 *Breakfast Transaction Receipt:*\n\n"
-            if context.user_data.get("cancel_requested"):
-                res = "🛑 *Breakfast Operation Aborted!*\n\n"
-            
-            if ok:
-                res += "✅ *Status:* `Success!`\n"
-                res += f"🎁 *Deal Locked:* `{offer_info['title']}`\n"
-                res += f"ℹ️ *Note:* {note}\n\n"
-                res += "🎉 Offer has been added to your Swiggy cart / coupons section!\n"
-            else:
-                res += "❌ *Status:* `Failed / Locked`\n"
-                res += f"🎁 *Deal Tried:* `{offer_info['title']}` (1 Try)\n"
-                res += f"⚠️ *Reason:* `{note}`\n\n"
-                res += "💡 *Tip:* This deal slot is currently inactive or already claimed. Select another offer from the menu.\n"
-
-            if ok:
-                res += "\n✧ *crafted by shivansh* ✧"
-            await status_msg.edit_text(res, parse_mode="Markdown")
-    finally:
-        context.user_data["is_running"] = False
-
-
-async def run_auto_breakfast_all(session_data: dict, status_msg, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["is_running"] = True
-    context.user_data["cancel_requested"] = False
-    connector = aiohttp.TCPConnector(ssl=False)
-    summary = []
-    any_success = False
-
-    try:
-        async with aiohttp.ClientSession(connector=connector) as client:
-            for opt in (1, 2, 3, 4):
-                if context.user_data.get("cancel_requested"):
-                    break
-
-                info = BREAKFAST_OFFERS[opt]
-                try:
-                    await status_msg.edit_text(
-                        f"🍳 *Auto-Trying All 4 Breakfast Deals...*\n\n"
-                        f"🎯 Testing: `[{opt}/4] {info['title']}`\n"
-                        f"🔗 Mode: `1 Attempt per offer`",
-                        reply_markup=get_cancel_button(),
-                        parse_mode="Markdown"
-                    )
-                except Exception:
-                    pass
-
-                ok, note = await request_single_breakfast_lock(session_data, opt, client)
-                if ok:
-                    any_success = True
-                    summary.append(f"• *{info['title']}*: ✅ {note}")
-                    break
-                else:
-                    summary.append(f"• *{info['title']}*: ❌ {note}")
-
-                await asyncio.sleep(0.35)
-
-        if context.user_data.get("cancel_requested"):
-            final = "🛑 *Breakfast Auto-Claim Cancelled!*\n\n"
-        else:
-            final = "🏆 *Breakfast Auto-Claim Finished!*\n\n"
-            
-        final += "\n".join(summary) + "\n\n"
-        
-        if any_success:
-            final += "🎉 Offer aapke Swiggy account me apply ho gaya hai!\n\n✧ *crafted by shivansh* ✧\n"
-        else:
-            final += "⚠️ All 4 offers were tested once, but slots are currently unavailable on Swiggy.\n"
-
-        try:
-            await status_msg.edit_text(final, parse_mode="Markdown")
-        except Exception:
-            pass
-    finally:
-        context.user_data["is_running"] = False
-
-
-# ── FEATURE 2.5: PICK LATE NIGHT OFFER ─────────────────────────────────────
-async def request_single_night_lock(session_data: dict, offer_index: int, client: aiohttp.ClientSession):
-    device_id = get_random_device_id()
-    token = str(session_data.get("token", "")).strip()
-    tid = str(session_data.get("tid", "")).strip()
-    sid = str(session_data.get("sid", "")).strip()
-    uid = str(session_data.get("userid", "")).strip()
-
-    page_headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 4 Build/RD2A.211001.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.120 Mobile Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Content-Type": "application/json",
-        "platform": "Swiggy-Android",
-        "version-code": "1795",
-        "model-name": "PIXEL 4",
-        "manufacturer": "GOOGLE",
-        "application_name": "swiggy-app",
-        "appversion": "4.113.0",
-        "Origin": EVENTS_HOST,
-        "Referer": NYO_PAGE_URL,
-        "deviceId": device_id,
-        "swuid": device_id,
-        "token": token,
-        "tid": tid,
-        "userid": uid,
-        "sessionid": sid,
-        "Cookie": f"token={token}; tid={tid}; sid={sid}; user_id={uid}; _session_id={sid}",
-    }
-
-    last_error = "The offer slot is currently locked/inactive for this account by Swiggy server."
-
-    endpoints = [
-        f"{EVENTS_HOST}/api/pick-your-late-night-offer",
-        f"{EVENTS_HOST}/api/pick-your-late-night-offer-coupon",
-        f"{EVENTS_HOST}/api/pick-your-offer-coupon",
-        f"{EVENTS_HOST}/api/book-your-offer-coupon"
-    ]
-    for url in endpoints:
-        try:
-            async with client.post(
-                url,
-                headers=page_headers,
-                json={"campaign": "pick-your-late-night-offer", "offerIndex": offer_index},
-                timeout=aiohttp.ClientTimeout(total=6)
-            ) as resp:
-                if resp.status == 404:
-                    continue
-                text = await resp.text()
-                try:
-                    d = json.loads(text)
-                    inner = d.get("data", {})
-                    if inner.get("end_date"):
-                        return True, f"Late Night Offer Locked! (Valid till {inner.get('end_date')})"
-                    msg = d.get("statusMessage") or d.get("message")
-                    if msg:
-                        if "SUCCESS" in msg.upper():
-                            return True, msg
-                        last_error = str(msg)
-                except Exception:
-                    if resp.status == 200 and not text.strip().startswith("<"):
-                        return True, "Offer Locked Successfully!"
-                    elif resp.status != 200:
-                        last_error = f"Events API Error: HTTP {resp.status}"
-                if resp.status != 404:
-                    break
-        except Exception as e:
-            last_error = str(e)
-
-    headers = build_spns_headers(session_data)
-    spns_payload = {
-        "campaignId": "pick-your-late-night-offer",
-        "senderUserId": uid,
-        "senderLocation": {"latitude": 28.6315, "longitude": 77.2167},
-        "isReferralFlow": False,
-        "offerIndex": offer_index,
-        "receivers": [{"userId": uid}],
-    }
-    try:
-        async with client.post(
-            SPNS_BASE_URL + CREATE_OFFERS_PATH,
-            headers=headers,
-            json=spns_payload,
-            timeout=aiohttp.ClientTimeout(total=8)
-        ) as resp:
-            data = await resp.json(content_type=None)
-            if isinstance(data, dict):
-                inner = data.get("data") if isinstance(data.get("data"), dict) else {}
-                results = inner.get("receiverResults") if isinstance(inner.get("receiverResults"), list) else []
-                for res in results:
-                    for bl, off in (res.get("offersByBL") or {}).items():
-                        if off.get("status") == "SUCCESS":
-                            val = _parse_amount(off.get("offerValue"))
-                            return True, f"Late Night Offer Locked! (Rs.{val:.0f} via {bl})"
-                        else:
-                            err = off.get("errorCode") or "Already claimed or slot locked"
-                            if "Error creating offers" not in str(err) and "Missing headers" not in str(err):
-                                last_error = str(err)
-                msg = data.get("statusMessage")
-                if msg and "Error creating offers" not in str(msg) and "Missing headers" not in str(msg):
-                    last_error = str(msg)
-    except Exception:
-        pass
-
-    if "Error creating offers" in last_error or "Missing headers" in last_error:
-        last_error = "Account not eligible or offer exhausted for today."
-
-    return False, last_error
-
-
-async def run_single_night_offer(session_data: dict, offer_index: int, status_msg, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["is_running"] = True
-    context.user_data["cancel_requested"] = False
-    try:
-        offer_info = NIGHT_OFFERS.get(offer_index, {"title": f"Option {offer_index}", "desc": ""})
-        connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector) as client:
-            await status_msg.edit_text(
-                f"🍔 *Claiming Late Night Offer...*\n\n"
-                f"🎁 *Deal:* `{offer_info['title']}`\n"
-                f"📝 *Details:* {offer_info['desc']}\n"
-                f"🎯 *Attempt:* `1/1` (Single Try)\n"
-                f"🔗 *Page:* `pick-your-late-night-offer`",
-                parse_mode="Markdown"
-            )
-
-            ok, note = await request_single_night_lock(session_data, offer_index, client)
-
-            res = "🧾 *Late Night Transaction Receipt:*\n\n"
-            if context.user_data.get("cancel_requested"):
-                res = "🛑 *Late Night Operation Aborted!*\n\n"
-            
-            if ok:
-                res += "✅ *Status:* `Success!`\n"
-                res += f"🎁 *Deal Locked:* `{offer_info['title']}`\n"
-                res += f"ℹ️ *Note:* {note}\n\n"
-                res += "🎉 Offer has been added to your Swiggy cart / coupons section!\n"
-            else:
-                res += "❌ *Status:* `Failed / Locked`\n"
-                res += f"🎁 *Deal Tried:* `{offer_info['title']}` (1 Try)\n"
-                res += f"⚠️ *Reason:* `{note}`\n\n"
-                res += "💡 *Tip:* This deal slot is currently inactive or already claimed. Select another offer from the menu.\n"
-
-            if ok:
-                res += "\n✧ *crafted by shivansh* ✧"
-            await status_msg.edit_text(res, parse_mode="Markdown")
-    finally:
-        context.user_data["is_running"] = False
-
-
-async def run_auto_night_all(session_data: dict, status_msg, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["is_running"] = True
-    context.user_data["cancel_requested"] = False
-    connector = aiohttp.TCPConnector(ssl=False)
-    summary = []
-    any_success = False
-
-    try:
-        async with aiohttp.ClientSession(connector=connector) as client:
-            for opt in (1, 2, 3, 4):
-                if context.user_data.get("cancel_requested"):
-                    break
-
-                info = NIGHT_OFFERS[opt]
-                try:
-                    await status_msg.edit_text(
-                        f"🍔 *Auto-Trying All 4 Late Night Deals...*\n\n"
-                        f"🎯 Testing: `[{opt}/4] {info['title']}`\n"
-                        f"🔗 Mode: `1 Attempt per offer`",
-                        reply_markup=get_cancel_button(),
-                        parse_mode="Markdown"
-                    )
-                except Exception:
-                    pass
-
-                ok, note = await request_single_night_lock(session_data, opt, client)
-                if ok:
-                    any_success = True
-                    summary.append(f"• *{info['title']}*: ✅ {note}")
-                    break
-                else:
-                    summary.append(f"• *{info['title']}*: ❌ {note}")
-
-                await asyncio.sleep(0.35)
-
-        if context.user_data.get("cancel_requested"):
-            final = "🛑 *Late Night Auto-Claim Cancelled!*\n\n"
-        else:
-            final = "🏆 *Late Night Auto-Claim Finished!*\n\n"
-            
-        final += "\n".join(summary) + "\n\n"
-        
-        if any_success:
-            final += "🎉 Offer aapke Swiggy account me apply ho gaya hai!\n\n✧ *crafted by shivansh* ✧\n"
-        else:
-            final += "⚠️ All 4 offers were tested once, but slots are currently unavailable on Swiggy.\n"
-
-        try:
-            await status_msg.edit_text(final, parse_mode="Markdown")
-        except Exception:
-            pass
-    finally:
-        context.user_data["is_running"] = False
-
-
 # ── FEATURE 3: BULK REFERRAL LINK PROCESSING ─────────────────────────────────
 async def claim_referral_link(session_data: dict, campaign_id: str, referrer_id: str, client: aiohttp.ClientSession):
     headers = build_spns_headers(session_data)
@@ -1069,7 +610,6 @@ async def run_bulk_links(session_data: dict, status_msg, context: ContextTypes.D
 def get_main_reply_keyboard():
     keyboard = [
         [KeyboardButton("⚡ Free Cash Loot (12 Users)")],
-        [KeyboardButton("🍳 Breakfast Offer (4 Deals)"), KeyboardButton("🍔 Night Offer (4 Deals)")],
         [KeyboardButton("📱 Authentication"), KeyboardButton("📁 Saved Accounts")],
         [KeyboardButton("🔄 Restart System")]
     ]
@@ -1086,7 +626,6 @@ def show_login_choice_markup():
 def get_inline_main_markup():
     keyboard = [
         [InlineKeyboardButton("⚡ Start Free Cash Loot", callback_data="opt_cash_loot")],
-        [InlineKeyboardButton("🍳 Breakfast", callback_data="opt_byo_menu"), InlineKeyboardButton("🍔 Night", callback_data="opt_nyo_menu")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -1178,12 +717,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if context.user_data.get("is_running"): return
             status = await query.message.reply_text("⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
             asyncio.create_task(run_10_live_users_loot(selected_acc, status, context, target_success=TARGET_SUCCESS_COUNT))
-        elif target in ("byo", "byo_menu"):
-            msg_text = ("🍳 *Premium Breakfast Selection*\n🔗 `events.swiggy.com/book-your-offer`\n\nSelect your deal:")
-            await query.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
-        elif target == "nyo_menu":
-            msg_text = ("🍔 *Premium Late Night Selection*\n🔗 `events.swiggy.com/pick-your-late-night-offer`\n\nSelect your deal:")
-            await query.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
         return
 
     if query.data == "opt_cash_loot":
@@ -1197,65 +730,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         status = await query.message.reply_text("⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
         asyncio.create_task(run_10_live_users_loot(session, status, context, target_success=TARGET_SUCCESS_COUNT))
-
-    elif query.data == "opt_byo_menu":
-        if not session or not session.get("token"):
-            context.user_data["next_target"] = "byo_menu"
-            await query.message.reply_text("⚠️ *Login Required!*\n\nPlease login first to claim the Breakfast offer.", reply_markup=show_login_choice_markup(), parse_mode="Markdown")
-            return
-
-        msg_text = (
-            "🍳 *Premium Breakfast Selection*\n"
-            "🔗 `events.swiggy.com/book-your-offer`\n\n"
-            "Select your favorite deal from the 4 options below (1 Single Try):"
-        )
-        await query.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
-
-    elif query.data.startswith("byo_opt_"):
-        choice = query.data.replace("byo_opt_", "")
-        if not session or not session.get("token"):
-            await query.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup())
-            return
-        if context.user_data.get("is_running"):
-            await query.message.reply_text("⚠️ An operation is already in progress. Please 🛑 Stop it first.")
-            return
-
-        if choice == "auto":
-            status = await query.message.reply_text("⚡ Initializing *Auto-Claim (1 attempt each across 4 deals)*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
-            asyncio.create_task(run_auto_breakfast_all(session, status, context))
-        else:
-            idx = int(choice)
-            status = await query.message.reply_text(f"🍳 Locking *Deal {idx}* (1 Try)...", reply_markup=get_cancel_button(), parse_mode="Markdown")
-            asyncio.create_task(run_single_breakfast_offer(session, idx, status, context))
-
-    elif query.data == "opt_nyo_menu":
-        if not session or not session.get("token"):
-            context.user_data["next_target"] = "nyo_menu"
-            await query.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup())
-            return
-        msg_text = (
-            "🍔 *Premium Late Night Selection*\n"
-            "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
-            "Select your favorite deal from the 4 options below (1 Single Try):"
-        )
-        await query.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
-
-    elif query.data.startswith("nyo_opt_"):
-        choice = query.data.replace("nyo_opt_", "")
-        if not session or not session.get("token"):
-            await query.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup())
-            return
-        if context.user_data.get("is_running"):
-            await query.message.reply_text("⚠️ An operation is already in progress. Please 🛑 Stop it first.")
-            return
-
-        if choice == "auto":
-            status = await query.message.reply_text("⚡ Initializing *Auto-Claim (1 attempt each across 4 deals)*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
-            asyncio.create_task(run_auto_night_all(session, status, context))
-        else:
-            idx = int(choice)
-            status = await query.message.reply_text(f"🍔 Locking *Deal {idx}* (1 Try)...", reply_markup=get_cancel_button(), parse_mode="Markdown")
-            asyncio.create_task(run_single_night_offer(session, idx, status, context))
 
     elif query.data == "login_phone_opt":
         context.user_data["state"] = "awaiting_phone"
@@ -1300,32 +774,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(run_10_live_users_loot(session, status, context, target_success=TARGET_SUCCESS_COUNT))
         return
 
-    if text in ("🍳 Pick Breakfast Offer (4 Deals)", "🍳 Breakfast Offer (4 Deals)"):
-        if not session or not session.get("token"):
-            context.user_data["next_target"] = "byo_menu"
-            await update.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup())
-            return
-        msg_text = (
-            "🍳 *Premium Breakfast Selection*\n"
-            "🔗 `events.swiggy.com/book-your-offer`\n\n"
-            "Select your deal from the 4 options below (1 Single Try):"
-        )
-        await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
-        return
-
-    if text == "🍔 Night Offer (4 Deals)":
-        if not session or not session.get("token"):
-            context.user_data["next_target"] = "nyo_menu"
-            await update.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup())
-            return
-        msg_text = (
-            "🍔 *Premium Late Night Selection*\n"
-            "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
-            "Select your deal from the 4 options below (1 Single Try):"
-        )
-        await update.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
-        return
-
     if text in ("🔄 Restart System", "/start"):
         await cmd_start(update, context)
         return
@@ -1350,20 +798,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if context.user_data.get("is_running"): return
                 status = await update.message.reply_text("⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
                 asyncio.create_task(run_10_live_users_loot(parsed, status, context, target_success=TARGET_SUCCESS_COUNT))
-            elif target in ("byo", "byo_menu"):
-                msg_text = (
-                    "🍳 *Premium Breakfast Selection*\n"
-                    "🔗 `events.swiggy.com/book-your-offer`\n\n"
-                    "Select from the 4 deals below:"
-                )
-                await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
-            elif target == "nyo_menu":
-                msg_text = (
-                    "🍔 *Premium Late Night Selection*\n"
-                    "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
-                    "Select from the 4 deals below:"
-                )
-                await update.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
             return
         except Exception as e:
             await update.message.reply_text(f"❌ JSON Parse Error: {str(e)}\nPlease paste it in the correct format.")
@@ -1450,13 +884,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             if context.user_data.get("is_running"): return
                             status = await update.message.reply_text("⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
                             asyncio.create_task(run_10_live_users_loot(parsed_session, status, context, target_success=TARGET_SUCCESS_COUNT))
-                        elif target in ("byo", "byo_menu"):
-                            msg_text = (
-                                "🍳 *Premium Breakfast Selection*\n"
-                                "🔗 `events.swiggy.com/book-your-offer`\n\n"
-                                "Select from the 4 deals below:"
-                            )
-                            await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
                     else:
                         await update.message.reply_text(f"❌ Login Failed: {data.get('statusMessage')}")
             except Exception as e:
