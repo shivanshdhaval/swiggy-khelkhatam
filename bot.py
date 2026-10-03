@@ -216,16 +216,17 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                             last_update_time = time.time()
                         except: pass
 
-                    tasks = [discover_live_users(
-                        session_data, 
-                        lat + random.uniform(-0.035, 0.035), 
-                        lng + random.uniform(-0.035, 0.035), 
-                        client, list(tried_ids)
-                    ) for _, lat, lng in batch]
-                    
+                    # DYNAMIC JITTER
+                    jitter_tasks = []
+                    for city_data in batch:
+                        j_lat = city_data[1] + random.uniform(-0.035, 0.035)
+                        j_lng = city_data[2] + random.uniform(-0.035, 0.035)
+                        jitter_tasks.append((city_data[0], j_lat, j_lng))
+
+                    tasks = [discover_live_users(session_data, jl, jlg, client, list(tried_ids)) for _, jl, jlg in jitter_tasks]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    for (city, _, _), res in zip(batch, results):
+                    for (city, j_lat, j_lng), res in zip(jitter_tasks, results):
                         if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
                         if isinstance(res, Exception) or not res[0]: continue
 
@@ -240,7 +241,8 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                                 fail_count += 1
                                 continue
 
-                            ok, note = await invite_live_user(session_data, u, lat, lng, client)
+                            # FIX: pass j_lat and j_lng explicitly
+                            ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
                             if ok:
                                 joined_count += 1
                                 summary_lines.append(f"✅ `{name}`")
