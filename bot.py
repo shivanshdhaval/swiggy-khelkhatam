@@ -5,6 +5,8 @@ import base64
 import json
 import re
 import secrets
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import aiohttp
 from telegram import (
     Update,
@@ -21,6 +23,28 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+# ── RENDER DUMMY HTTP SERVER (PORT BINDING FOR UPTIMEROBOT) ──────────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Bot is ALIVE and RUNNING 24/7!")
+        
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return  # Suppress console log clutter
+
+def run_http_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    print(f"🌐 HTTP Port {port} successfully bound for Render & UptimeRobot.")
+    server.serve_forever()
 
 # ── BOT CONFIG ───────────────────────────────────────────────────────────────
 BOT_TOKEN = "8918993850:AAG-svWDI3GFH1b0cDuozIH-UHlvvgj1QWY"
@@ -220,11 +244,12 @@ def parse_session_string(raw: str) -> dict:
         if isinstance(data, dict):
             sources = [data]
             if isinstance(data.get("data"), dict):
-                sources.append(data["data"])
+                sources.append(data.get("data"))
             for src in sources:
-                for k in ("token", "secret_token", "access_token", "tid", "sid", "userid", "customerId", "phone", "mobile"):
-                    if k in src and k not in session:
-                        session[k] = src[k]
+                if isinstance(src, dict):
+                    for k in ("token", "secret_token", "access_token", "tid", "sid", "userid", "customerId", "phone", "mobile"):
+                        if k in src and k not in session:
+                            session[k] = src[k]
             if "token" not in session:
                 for alias in ("secret_token", "access_token"):
                     if session.get(alias):
@@ -232,10 +257,11 @@ def parse_session_string(raw: str) -> dict:
                         break
         elif isinstance(data, list):
             for header in data:
-                n = str(header.get("name", "")).lower()
-                v = header.get("value", "")
-                if n in ("token", "tid", "sid", "userid", "phone"):
-                    session[n] = v
+                if isinstance(header, dict):
+                    n = str(header.get("name", "")).lower()
+                    v = header.get("value", "")
+                    if n in ("token", "tid", "sid", "userid", "phone"):
+                        session[n] = v
     except Exception:
         pass
 
@@ -1044,7 +1070,8 @@ def get_main_reply_keyboard():
     keyboard = [
         [KeyboardButton("⚡ Free Cash Loot (12 Users)")],
         [KeyboardButton("🍳 Breakfast Offer (4 Deals)"), KeyboardButton("🍔 Night Offer (4 Deals)")],
-        [KeyboardButton("📱 Authentication"), KeyboardButton("🔄 Restart System")],
+        [KeyboardButton("📱 Authentication"), KeyboardButton("📁 Saved Accounts")],
+        [KeyboardButton("🔄 Restart System")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -1101,7 +1128,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_start(query, context)
         return
 
-    # NEW: Handle Saved Accounts Menu
+    # Handle Saved Accounts Menu
     if query.data == "login_saved_opt":
         chat_id = str(update.effective_chat.id)
         accounts = load_accounts().get(chat_id, [])
@@ -1123,7 +1150,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("🔐 *System Authentication*\n\nSelect a login method below:", reply_markup=show_login_choice_markup())
         return
 
-    # NEW: Handle Login via Saved Account
+    # Handle Login via Saved Account
     if query.data.startswith("use_acc_"):
         uid = query.data.replace("use_acc_", "")
         chat_id = str(update.effective_chat.id)
@@ -1136,7 +1163,6 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         status_msg = await query.message.reply_text("🔄 Validating saved account with Swiggy servers...")
         
-        # Validating account
         is_valid = await validate_session(selected_acc)
         if not is_valid:
             remove_saved_account(chat_id, uid)
@@ -1148,16 +1174,15 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await status_msg.edit_text(f"🔓 *Login Successful via Saved Account!*\n👤 *User ID:* `{uid}`\n\n✧ *shivansh* ✧", parse_mode="Markdown")
         
-        # Auto-resume task if requested before login
         if target == "cash_loot":
             if context.user_data.get("is_running"): return
             status = await query.message.reply_text("⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(), parse_mode="Markdown")
             asyncio.create_task(run_10_live_users_loot(selected_acc, status, context, target_success=TARGET_SUCCESS_COUNT))
         elif target in ("byo", "byo_menu"):
-            msg_text = ("🍳 *Premium Breakfast Selection*\n🔗 `[events.swiggy.com/book-your-offer](https://events.swiggy.com/book-your-offer)`\n\nSelect your deal:")
+            msg_text = ("🍳 *Premium Breakfast Selection*\n🔗 `events.swiggy.com/book-your-offer`\n\nSelect your deal:")
             await query.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
         elif target == "nyo_menu":
-            msg_text = ("🍔 *Premium Late Night Selection*\n🔗 `[events.swiggy.com/pick-your-late-night-offer](https://events.swiggy.com/pick-your-late-night-offer)`\n\nSelect your deal:")
+            msg_text = ("🍔 *Premium Late Night Selection*\n🔗 `events.swiggy.com/pick-your-late-night-offer`\n\nSelect your deal:")
             await query.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
         return
 
@@ -1181,7 +1206,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg_text = (
             "🍳 *Premium Breakfast Selection*\n"
-            "🔗 `[events.swiggy.com/book-your-offer](https://events.swiggy.com/book-your-offer)`\n\n"
+            "🔗 `events.swiggy.com/book-your-offer`\n\n"
             "Select your favorite deal from the 4 options below (1 Single Try):"
         )
         await query.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
@@ -1210,7 +1235,7 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg_text = (
             "🍔 *Premium Late Night Selection*\n"
-            "🔗 `[events.swiggy.com/pick-your-late-night-offer](https://events.swiggy.com/pick-your-late-night-offer)`\n\n"
+            "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
             "Select your favorite deal from the 4 options below (1 Single Try):"
         )
         await query.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
@@ -1247,6 +1272,21 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = context.user_data.get("swiggy_session")
     chat_id = update.effective_chat.id
 
+    if text == "📁 Saved Accounts":
+        accounts = load_accounts().get(str(chat_id), [])
+        if not accounts:
+            await update.message.reply_text("⚠️ No saved accounts found. Please authenticate to save one.")
+            return
+        kb = []
+        for acc in accounts:
+            uid = acc.get("userid", "Unknown")
+            phone = acc.get("phone", "")
+            label = f"👤 {phone if phone else uid}"
+            kb.append([InlineKeyboardButton(label, callback_data=f"switch_acc_{uid}")])
+        kb.append([InlineKeyboardButton("🧹 Clean Invalid Accounts", callback_data="clean_invalid_accs")])
+        await update.message.reply_text("📁 *Your Saved Accounts:*\n\nSelect an account below to switch your active session, or clean up expired ones.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
+        return
+
     if text in ("⚡ Free Cash Loot (12 Users)", "🚀 Start Free Cash Loot (20 Users)"):
         if not session or not session.get("token"):
             context.user_data["next_target"] = "cash_loot"
@@ -1267,7 +1307,7 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg_text = (
             "🍳 *Premium Breakfast Selection*\n"
-            "🔗 `[events.swiggy.com/book-your-offer](https://events.swiggy.com/book-your-offer)`\n\n"
+            "🔗 `events.swiggy.com/book-your-offer`\n\n"
             "Select your deal from the 4 options below (1 Single Try):"
         )
         await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
@@ -1280,7 +1320,7 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg_text = (
             "🍔 *Premium Late Night Selection*\n"
-            "🔗 `[events.swiggy.com/pick-your-late-night-offer](https://events.swiggy.com/pick-your-late-night-offer)`\n\n"
+            "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
             "Select your deal from the 4 options below (1 Single Try):"
         )
         await update.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
@@ -1294,14 +1334,12 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔐 *System Authentication*\n\nTo access premium features, please securely link your Swiggy account. Select a login method below:", reply_markup=show_login_choice_markup())
         return
 
-    # JSON Session Auto-detect
     if (text.startswith("{") and text.endswith("}")) or '"token"' in text or state == "awaiting_json":
         try:
             parsed = parse_session_string(text)
             context.user_data["swiggy_session"] = parsed
             context.user_data.pop("state", None)
 
-            # Save account to file
             add_saved_account(chat_id, parsed)
 
             target = context.user_data.pop("next_target", None)
@@ -1315,14 +1353,14 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif target in ("byo", "byo_menu"):
                 msg_text = (
                     "🍳 *Premium Breakfast Selection*\n"
-                    "🔗 `[events.swiggy.com/book-your-offer](https://events.swiggy.com/book-your-offer)`\n\n"
+                    "🔗 `events.swiggy.com/book-your-offer`\n\n"
                     "Select from the 4 deals below:"
                 )
                 await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
             elif target == "nyo_menu":
                 msg_text = (
                     "🍔 *Premium Late Night Selection*\n"
-                    "🔗 `[events.swiggy.com/pick-your-late-night-offer](https://events.swiggy.com/pick-your-late-night-offer)`\n\n"
+                    "🔗 `events.swiggy.com/pick-your-late-night-offer`\n\n"
                     "Select from the 4 deals below:"
                 )
                 await update.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
@@ -1331,7 +1369,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ JSON Parse Error: {str(e)}\nPlease paste it in the correct format.")
             return
 
-    # Direct links or referral links in chat
     found_links = extract_all_links(text)
     if found_links:
         if not session or not session.get("token"):
@@ -1346,7 +1383,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(run_bulk_links(session, status, context, found_links))
         return
 
-    # Phone input state
     if state == "awaiting_phone" or (re.fullmatch(r"\d{10}", text) and not context.user_data.get("temp_auth")):
         phone = re.sub(r"\D", "", text)[-10:]
         dev_id = get_random_device_id()
@@ -1369,7 +1405,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"❌ Network Error: {str(e)}")
         return
 
-    # OTP input state
     temp = context.user_data.get("temp_auth")
     if temp and (state == "awaiting_otp" or re.fullmatch(r"\d{4,6}", text)):
         otp = text.strip()
@@ -1395,7 +1430,7 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         inner = data.get("data") or {}
                         tid = data.get("tid") or inner.get("tid")
                         token = inner.get("token") or inner.get("accessToken")
-                        userid = _decode_tid_payload(tid).get("user_id")
+                        userid = str(_decode_tid_payload(tid).get("user_id"))
 
                         parsed_session = {
                             "userid": str(userid), "token": token,
@@ -1406,7 +1441,6 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         context.user_data.pop("temp_auth", None)
                         context.user_data.pop("state", None)
 
-                        # Save account to file
                         add_saved_account(chat_id, parsed_session)
 
                         target = context.user_data.pop("next_target", None)
@@ -1419,7 +1453,7 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         elif target in ("byo", "byo_menu"):
                             msg_text = (
                                 "🍳 *Premium Breakfast Selection*\n"
-                                "🔗 `[events.swiggy.com/book-your-offer](https://events.swiggy.com/book-your-offer)`\n\n"
+                                "🔗 `events.swiggy.com/book-your-offer`\n\n"
                                 "Select from the 4 deals below:"
                             )
                             await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
