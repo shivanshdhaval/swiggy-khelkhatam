@@ -5,6 +5,7 @@ import base64
 import json
 import re
 import secrets
+import random
 import aiohttp
 import aiohttp.web
 from telegram import (
@@ -35,7 +36,7 @@ async def start_web_server():
     port = int(os.environ.get('PORT', 8080))
     site = aiohttp.web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    print(f"🌐 HTTP Port {port} successfully bound for Render & UptimeRobot.")
+    print(f"🌐 HTTP Port {port} successfully bound for Render.")
 
 # ── BOT CONFIG ───────────────────────────────────────────────────────────────
 BOT_TOKEN = "8918993850:AAG-svWDI3GFH1b0cDuozIH-UHlvvgj1QWY"
@@ -59,17 +60,24 @@ SWIGGY_APP_HEADERS = {
     "model-name": "MOTO G(60)",
 }
 
+# Expanded & high-density areas
 ALL_AREAS = [
-    ("Delhi - Connaught Place", 28.6315, 77.2167),
+    ("Delhi - CP", 28.6315, 77.2167),
     ("Delhi - Saket", 28.5245, 77.2066),
     ("Delhi - Hauz Khas", 28.5433, 77.2066),
     ("Delhi - Karol Bagh", 28.6519, 77.1909),
+    ("Noida - Sec 18", 28.5698, 77.3200),
+    ("Gurgaon - CyberHub", 28.4950, 77.0895),
     ("Bengaluru - Koramangala", 12.9352, 77.6245),
     ("Bengaluru - Indiranagar", 12.9784, 77.6408),
-    ("Mumbai - Bandra West", 19.0596, 72.8295),
-    ("Mumbai - Andheri West", 19.1363, 72.8277),
+    ("Bengaluru - HSR", 12.9121, 77.6446),
+    ("Mumbai - Bandra", 19.0596, 72.8295),
+    ("Mumbai - Andheri", 19.1136, 72.8697),
+    ("Mumbai - Powai", 19.1176, 72.9060),
     ("Pune - Hinjewadi", 18.5912, 73.7389),
+    ("Pune - Viman Nagar", 18.5679, 73.9143),
     ("Hyderabad - Hitec City", 17.4435, 78.3772),
+    ("Hyderabad - Jubilee Hills", 17.4326, 78.4071),
     ("Chennai - T Nagar", 13.0418, 80.2341),
     ("Kolkata - Park Street", 22.5526, 88.3539),
     ("Ahmedabad - SG Highway", 23.0225, 72.5714),
@@ -81,22 +89,19 @@ ACCOUNTS_FILE = "saved_accounts.json"
 def load_accounts():
     if os.path.exists(ACCOUNTS_FILE):
         try:
-            with open(ACCOUNTS_FILE, "r") as f:
-                return json.load(f)
+            with open(ACCOUNTS_FILE, "r") as f: return json.load(f)
         except: pass
     return {}
 
 def save_accounts(data):
     try:
-        with open(ACCOUNTS_FILE, "w") as f:
-            json.dump(data, f, indent=4)
+        with open(ACCOUNTS_FILE, "w") as f: json.dump(data, f, indent=4)
     except: pass
 
 def add_saved_account(chat_id, session_data):
     chat_id = str(chat_id)
     accounts = load_accounts()
-    if chat_id not in accounts:
-        accounts[chat_id] = []
+    if chat_id not in accounts: accounts[chat_id] = []
     accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(session_data.get("userid"))]
     accounts[chat_id].append(session_data)
     save_accounts(accounts)
@@ -112,47 +117,17 @@ def remove_saved_account(chat_id, userid):
             return True
     return False
 
-async def validate_session(session_data: dict) -> bool:
-    headers = build_spns_headers(session_data)
-    payload = {
-        "location": {"latitude": 28.6315, "longitude": 77.2167},
-        "tid": str(session_data.get("tid", "")),
-        "campaignId": DEFAULT_CAMPAIGN_ID,
-        "userId": str(session_data.get("userid", "")),
-        "isFreshLocation": True,
-    }
-    try:
-        async with aiohttp.ClientSession() as client:
-            async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=headers, json=payload, timeout=5) as resp:
-                if resp.status in (401, 403):
-                    return False
-                data = await resp.json(content_type=None)
-                if isinstance(data, dict):
-                    msg = str(data.get("statusMessage", "")).lower()
-                    if "unauthorized" in msg or "token invalid" in msg:
-                        return False
-    except: pass
-    return True
-
 # ── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
-def get_random_device_id():
-    return secrets.token_hex(8)
+def get_random_device_id(): return secrets.token_hex(8)
 
 def _decode_tid_payload(tid: str) -> dict:
     try:
         parts = tid.split(".")
         if len(parts) < 2: return {}
-        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
-        return json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8"))
+        return json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (4 - len(parts[1]) % 4)).decode("utf-8"))
     except: return {}
 
-def _userid_from_tid(tid: str):
-    return str(_decode_tid_payload(tid).get("user_id") or "")
-
-def _parse_amount(value) -> float:
-    if isinstance(value, dict): value = value.get("units", value.get("amount", 0))
-    try: return float(value)
-    except: return 0.0
+def _userid_from_tid(tid: str): return str(_decode_tid_payload(tid).get("user_id") or "")
 
 def build_spns_headers(session_data: dict) -> dict:
     return {
@@ -172,7 +147,6 @@ def parse_session_string(raw: str) -> dict:
         data = json.loads(cleaned)
         sources = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
         if isinstance(data, dict) and isinstance(data.get("data"), dict): sources.append(data.get("data"))
-        
         for src in sources:
             if isinstance(src, dict):
                 for k in ("token", "tid", "sid", "userid", "phone"):
@@ -183,25 +157,21 @@ def parse_session_string(raw: str) -> dict:
                     if isinstance(header, dict) and str(header.get("name", "")).lower() in ("token", "tid", "sid", "userid", "phone"):
                         session[str(header.get("name", "")).lower()] = header.get("value", "")
     except: pass
-
     if not session:
         for key in ("token", "tid", "sid", "userid", "phone"):
             m = re.search(r'["\']?' + key + r'["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', cleaned, re.IGNORECASE)
             if m: session[key] = m.group(1)
-
-    if not session.get("token") and not session.get("tid"):
-        raise ValueError("Invalid Session: Token ya TID nahi mila.")
+    if not session.get("token") and not session.get("tid"): raise ValueError("Invalid Session")
     session["userid"] = str(session.get("userid") or _userid_from_tid(session.get("tid", "")))
     return session
 
-def get_cancel_button():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data="cancel_current_task")]])
+def get_cancel_button(): return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data="cancel_current_task")]])
 
-# ── FEATURE 1: DISCOVER & LOOT ───────────────────────────────────────────────
+# ── FEATURE: SUPERFAST DISCOVER & LOOT ───────────────────────────────────────
 async def discover_live_users(session_data: dict, lat: float, lng: float, client: aiohttp.ClientSession, seen: list):
     payload = {"location": {"latitude": lat, "longitude": lng}, "tid": str(session_data.get("tid", "")), "previousNearbyUserIds": seen or [], "campaignId": DEFAULT_CAMPAIGN_ID, "userId": str(session_data.get("userid", "")), "isFreshLocation": True}
     try:
-        async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=6) as resp:
+        async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=5) as resp:
             data = await resp.json(content_type=None)
             users = (data.get("data") or {}).get("nearbyUsers", [])
             return [u for u in users if isinstance(u, dict)], None
@@ -210,58 +180,82 @@ async def discover_live_users(session_data: dict, lat: float, lng: float, client
 async def invite_live_user(session_data: dict, user: dict, lat: float, lng: float, client: aiohttp.ClientSession):
     payload = {"campaignId": DEFAULT_CAMPAIGN_ID, "senderUserId": str(session_data.get("userid", "")), "senderLocation": {"latitude": lat, "longitude": lng}, "receivers": [{"userId": str(user.get("userId") or ""), "userName": str(user.get("userName") or "")}]}
     try:
-        async with client.post(SPNS_BASE_URL + CREATE_OFFERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=6) as resp:
+        async with client.post(SPNS_BASE_URL + CREATE_OFFERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=5) as resp:
             data = await resp.json(content_type=None)
             for res in ((data.get("data") or {}).get("receiverResults") or []):
                 for bl, offer in (res.get("offersByBL") or {}).items():
-                    if str(offer.get("status") or "") == "SUCCESS":
-                        return True, f"Rs.{_parse_amount(offer.get('offerValue')):.0f} ({bl})"
-                    elif str(offer.get("status") or "") == "FAILURE":
-                        return False, offer.get("errorCode") or "Server rejected"
-            return False, data.get("statusMessage") or "Offer limit or inactive"
+                    if str(offer.get("status") or "") == "SUCCESS": return True, "Success"
+                    elif str(offer.get("status") or "") == "FAILURE": return False, "Rejected"
+            return False, data.get("statusMessage") or "Inactive"
     except Exception as e: return False, str(e)
 
 async def run_10_live_users_loot(session_data: dict, status_msg, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["is_running"], context.user_data["cancel_requested"] = True, False
     joined_count, fail_count, tried_ids, summary_lines = 0, 0, set(), []
-    area_scores = {area[0]: 10.0 for area in ALL_AREAS}
+    
+    # Randomize start areas
     active_areas = list(ALL_AREAS)
+    random.shuffle(active_areas)
+    
+    last_update_time = 0
 
     try:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
             while joined_count < TARGET_SUCCESS_COUNT:
                 if context.user_data.get("cancel_requested"): break
-                active_areas.sort(key=lambda a: area_scores.get(a[0], 0), reverse=True)
                 
-                for i in range(0, len(active_areas), 5):
+                # BATCH SIZE INCREASED TO 8 FOR EXTREME SPEED
+                for i in range(0, len(active_areas), 8):
                     if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
-                    batch = active_areas[i:i+5]
+                    batch = active_areas[i:i+8]
                     
-                    try: await status_msg.edit_text(f"✦ *Loot Engine Running* ✦\n\n📍 *Scanning:* `{batch[0][0]}...`\n✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n❌ *Bypassed:* `{fail_count}`\n📡 *Scanned:* `{len(tried_ids)}`", reply_markup=get_cancel_button(), parse_mode="Markdown")
-                    except: pass
+                    # Update UI cleanly
+                    if time.time() - last_update_time > 2.0:
+                        try:
+                            zones = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
+                            await status_msg.edit_text(
+                                f"🚀 *Superfast Loot Engine* 🚀\n\n📍 *Radar:* `{zones}...`\n✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n❌ *Bypassed:* `{fail_count}`\n📡 *Scanned:* `{len(tried_ids)}`",
+                                reply_markup=get_cancel_button(), parse_mode="Markdown"
+                            )
+                            last_update_time = time.time()
+                        except: pass
 
-                    tasks = [discover_live_users(session_data, lat, lng, client, list(tried_ids)) for _, lat, lng in batch]
+                    # DYNAMIC JITTER: Shift coordinates by 2-3 KM every single loop to find totally NEW people
+                    tasks = [discover_live_users(
+                        session_data, 
+                        lat + random.uniform(-0.035, 0.035), 
+                        lng + random.uniform(-0.035, 0.035), 
+                        client, list(tried_ids)
+                    ) for _, lat, lng in batch]
+                    
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    for (city, lat, lng), res in zip(batch, results):
+                    for (city, _, _), res in zip(batch, results):
                         if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
                         if isinstance(res, Exception) or not res[0]: continue
 
                         new_users = [u for u in res[0] if str(u.get("userId", "")) not in tried_ids]
+                        
                         for u in new_users:
                             if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
-                            uid, name = str(u.get("userId") or ""), str(u.get("userName") or "Swiggy User")
+                            uid, name = str(u.get("userId") or ""), str(u.get("userName") or "User")
                             tried_ids.add(uid)
 
-                            if (u.get("status") or {}).get("isAssociated"): fail_count += 1; continue
+                            # Skip immediately if already associated
+                            if (u.get("status") or {}).get("isAssociated"):
+                                fail_count += 1
+                                continue
 
                             ok, note = await invite_live_user(session_data, u, lat, lng, client)
-                            if ok: joined_count += 1; summary_lines.append(f"✅ `{name}`: Won {note}"); area_scores[city] += 10.0
-                            else: fail_count += 1; summary_lines.append(f"❌ `{name}`: {note}")
+                            if ok:
+                                joined_count += 1
+                                summary_lines.append(f"✅ `{name}`")
+                            else:
+                                fail_count += 1
 
-                            if "limit" in note.lower() or "exhausted" in note.lower(): await asyncio.sleep(5)
-                            await asyncio.sleep(0.1)
-                await asyncio.sleep(2)
+                            await asyncio.sleep(0.05) # Super fast interval
+                
+                await asyncio.sleep(0.5) # Reduced batch delay
     except Exception as e: summary_lines.append(f"⚠️ Error: {str(e)}")
     finally: context.user_data["is_running"] = False
 
@@ -306,12 +300,8 @@ async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uid = query.data.replace("use_acc_", "")
         acc = next((a for a in load_accounts().get(chat_id, []) if str(a.get("userid")) == uid), None)
         if not acc: return await query.message.reply_text("❌ Account not found.")
-        status_msg = await query.message.reply_text("🔄 Validating account...")
-        if not await validate_session(acc):
-            remove_saved_account(chat_id, uid)
-            return await status_msg.edit_text("❌ *Account Expired!* Removed from saved list.", parse_mode="Markdown")
         context.user_data["swiggy_session"] = acc
-        await status_msg.edit_text(f"🔓 *Login Successful!*\n👤 *User ID:* `{uid}`", parse_mode="Markdown")
+        await query.message.edit_text(f"🔓 *Login Successful!*\n👤 *User ID:* `{uid}`", parse_mode="Markdown")
         return
 
     if query.data == "login_phone_opt":
@@ -336,7 +326,7 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "⚡ Free Cash Loot (12 Users)":
         if not session: return await update.message.reply_text("🔒 *Login Required*", reply_markup=show_login_choice_markup(), parse_mode="Markdown")
         if context.user_data.get("is_running"): return await update.message.reply_text("⚠️ Operation already running.")
-        status = await update.message.reply_text("⚡ Starting Engine...", reply_markup=get_cancel_button())
+        status = await update.message.reply_text("🚀 Starting Superfast Engine...", reply_markup=get_cancel_button())
         asyncio.create_task(run_10_live_users_loot(session, status, context))
         return
 
@@ -393,12 +383,4 @@ def main():
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CallbackQueryHandler(handle_buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
-
-    loop.create_task(start_web_server())
-    print("🤖 Swiggy Loot Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    app.add_handler(CallbackQueryHandler(ha
