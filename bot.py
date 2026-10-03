@@ -325,6 +325,20 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = await update.message.reply_text("⚡ Initializing Loot Engine...", reply_markup=get_cancel_button())
         asyncio.create_task(run_10_live_users_loot(session, status, context))
         return
+        
+    if text == "🍳 Breakfast Offer (4 Deals)":
+        if not session:
+            context.user_data["next_target"] = "byo_menu"
+            return await update.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup(), parse_mode="Markdown")
+        msg_text = "🍳 *Premium Breakfast Selection*\n🔗 `events.swiggy.com/book-your-offer`\n\nSelect your deal from the 4 options below (1 Single Try):"
+        return await update.message.reply_text(msg_text, reply_markup=get_breakfast_options_markup(), parse_mode="Markdown")
+
+    if text == "🍔 Night Offer (4 Deals)":
+        if not session:
+            context.user_data["next_target"] = "nyo_menu"
+            return await update.message.reply_text("🔒 *Authentication Required*\n\nPlease securely login to your account first:", reply_markup=show_login_choice_markup(), parse_mode="Markdown")
+        msg_text = "🍔 *Premium Late Night Selection*\n🔗 `events.swiggy.com/pick-your-late-night-offer`\n\nSelect your deal from the 4 options below (1 Single Try):"
+        return await update.message.reply_text(msg_text, reply_markup=get_night_options_markup(), parse_mode="Markdown")
 
     if text in ("🔄 Restart System", "/start"): return await cmd_start(update, context)
     if text == "📱 Authentication": return await update.message.reply_text("🔐 Authentication:", reply_markup=show_login_choice_markup())
@@ -356,3 +370,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
