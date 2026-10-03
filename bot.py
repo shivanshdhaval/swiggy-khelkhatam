@@ -195,9 +195,7 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
     active_areas = list(ALL_AREAS)
     random.shuffle(active_areas)
     
-    start_time = time.time()
     last_update_time = 0
-    live_action = "Warming up scanner..."
 
     try:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
@@ -211,26 +209,8 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                     if time.time() - last_update_time > 2.0:
                         try:
                             zones = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
-                            
-                            # Estimate Time Calculation
-                            elapsed = time.time() - start_time
-                            eta_str = "Calculating..."
-                            if joined_count > 0:
-                                eta_secs = int((elapsed / joined_count) * (TARGET_SUCCESS_COUNT - joined_count))
-                                eta_str = f"~{eta_secs}s"
-                                
-                            # Progress Bar
-                            progress_blocks = int((joined_count / TARGET_SUCCESS_COUNT) * 10)
-                            bar = f"[{'█' * progress_blocks}{'░' * (10 - progress_blocks)}]"
-
                             await status_msg.edit_text(
-                                f"🚀 *Superfast Loot Engine* 🚀\n\n"
-                                f"📊 *Progress:* `{bar}` *{joined_count}/{TARGET_SUCCESS_COUNT}*\n"
-                                f"⏱️ *ETA:* `{eta_str}`\n\n"
-                                f"📍 *Radar:* `{zones}...`\n"
-                                f"❌ *Bypassed:* `{fail_count}`\n"
-                                f"📡 *Scanned:* `{len(tried_ids)}`\n\n"
-                                f"👁️ *Live Action:* `{live_action}`",
+                                f"🚀 *Superfast Loot Engine* 🚀\n\n📍 *Radar:* `{zones}...`\n✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n❌ *Bypassed:* `{fail_count}`\n📡 *Scanned:* `{len(tried_ids)}`",
                                 reply_markup=get_cancel_button(), parse_mode="Markdown"
                             )
                             last_update_time = time.time()
@@ -259,18 +239,15 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
 
                             if (u.get("status") or {}).get("isAssociated"):
                                 fail_count += 1
-                                live_action = f"Skipping {name} (Already Looted)"
                                 continue
 
-                            live_action = f"Locking offer for {name} in {city.split(' - ')[0]}..."
+                            # FIX: pass j_lat and j_lng explicitly
                             ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
                             if ok:
                                 joined_count += 1
-                                live_action = f"🎯 YES! Looted from {name}!"
                                 summary_lines.append(f"✅ `{name}`")
                             else:
                                 fail_count += 1
-                                live_action = f"Failed for {name}: {note}"
 
                             await asyncio.sleep(0.05)
                 
