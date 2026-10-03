@@ -60,7 +60,6 @@ SWIGGY_APP_HEADERS = {
     "model-name": "MOTO G(60)",
 }
 
-# Expanded & high-density areas
 ALL_AREAS = [
     ("Delhi - CP", 28.6315, 77.2167),
     ("Delhi - Saket", 28.5245, 77.2066),
@@ -193,7 +192,6 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
     context.user_data["is_running"], context.user_data["cancel_requested"] = True, False
     joined_count, fail_count, tried_ids, summary_lines = 0, 0, set(), []
     
-    # Randomize start areas
     active_areas = list(ALL_AREAS)
     random.shuffle(active_areas)
     
@@ -204,12 +202,10 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
             while joined_count < TARGET_SUCCESS_COUNT:
                 if context.user_data.get("cancel_requested"): break
                 
-                # BATCH SIZE INCREASED TO 8 FOR EXTREME SPEED
                 for i in range(0, len(active_areas), 8):
                     if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requested"): break
                     batch = active_areas[i:i+8]
                     
-                    # Update UI cleanly
                     if time.time() - last_update_time > 2.0:
                         try:
                             zones = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
@@ -220,7 +216,6 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                             last_update_time = time.time()
                         except: pass
 
-                    # DYNAMIC JITTER: Shift coordinates by 2-3 KM every single loop to find totally NEW people
                     tasks = [discover_live_users(
                         session_data, 
                         lat + random.uniform(-0.035, 0.035), 
@@ -241,7 +236,6 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                             uid, name = str(u.get("userId") or ""), str(u.get("userName") or "User")
                             tried_ids.add(uid)
 
-                            # Skip immediately if already associated
                             if (u.get("status") or {}).get("isAssociated"):
                                 fail_count += 1
                                 continue
@@ -253,9 +247,9 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                             else:
                                 fail_count += 1
 
-                            await asyncio.sleep(0.05) # Super fast interval
+                            await asyncio.sleep(0.05)
                 
-                await asyncio.sleep(0.5) # Reduced batch delay
+                await asyncio.sleep(0.5)
     except Exception as e: summary_lines.append(f"⚠️ Error: {str(e)}")
     finally: context.user_data["is_running"] = False
 
@@ -383,4 +377,12 @@ def main():
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CallbackQueryHandler(ha
+    app.add_handler(CallbackQueryHandler(handle_buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+
+    loop.create_task(start_web_server())
+    print("🤖 Swiggy Loot Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
