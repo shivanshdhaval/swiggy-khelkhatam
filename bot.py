@@ -60,40 +60,24 @@ SWIGGY_APP_HEADERS = {
     "model-name": "MOTO G(60)",
 }
 
+# Core Fast Zones
 ALL_AREAS = [
     ("Delhi - CP", 28.6315, 77.2167),
     ("Delhi - Saket", 28.5245, 77.2066),
-    ("Delhi - Hauz Khas", 28.5433, 77.2066),
     ("Delhi - Karol Bagh", 28.6519, 77.1909),
-    ("Delhi - Laxmi Nagar", 28.6300, 77.2430),
     ("Noida - Sec 18", 28.5698, 77.3200),
     ("Gurgaon - CyberHub", 28.4950, 77.0895),
     ("Bengaluru - Koramangala", 12.9352, 77.6245),
     ("Bengaluru - Indiranagar", 12.9784, 77.6408),
     ("Bengaluru - HSR", 12.9121, 77.6446),
-    ("Bengaluru - Whitefield", 12.9698, 77.7499),
     ("Mumbai - Bandra", 19.0596, 72.8295),
     ("Mumbai - Andheri", 19.1136, 72.8697),
-    ("Mumbai - Powai", 19.1176, 72.9060),
-    ("Mumbai - Colaba", 18.9067, 72.8147),
     ("Pune - Hinjewadi", 18.5912, 73.7389),
     ("Pune - Viman Nagar", 18.5679, 73.9143),
-    ("Pune - Koregaon Park", 18.5362, 73.8939),
     ("Hyderabad - Hitec City", 17.4435, 78.3772),
-    ("Hyderabad - Jubilee Hills", 17.4326, 78.4071),
-    ("Hyderabad - Ameerpet", 17.4375, 78.4482),
     ("Chennai - T Nagar", 13.0418, 80.2341),
-    ("Chennai - Velachery", 12.9815, 80.2180),
     ("Kolkata - Park Street", 22.5526, 88.3539),
-    ("Kolkata - Salt Lake", 22.5864, 88.4006),
     ("Ahmedabad - SG Highway", 23.0225, 72.5714),
-    ("Ahmedabad - Navrangpura", 23.0365, 72.5611),
-    ("Jaipur - Malviya Nagar", 26.9124, 75.7873),
-    ("Lucknow - Gomti Nagar", 26.8467, 80.9462),
-    ("Chandigarh - Sector 17", 30.7333, 76.7794),
-    ("Indore - Vijay Nagar", 22.7196, 75.8577),
-    ("Bhopal - MP Nagar", 23.2599, 77.4126),
-    ("Patna - Boring Road", 25.6093, 85.1158),
 ]
 
 # ── SAVED ACCOUNTS SYSTEM ────────────────────────────────────────────────────
@@ -118,17 +102,6 @@ def add_saved_account(chat_id, session_data):
     accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(session_data.get("userid"))]
     accounts[chat_id].append(session_data)
     save_accounts(accounts)
-
-def remove_saved_account(chat_id, userid):
-    chat_id = str(chat_id)
-    accounts = load_accounts()
-    if chat_id in accounts:
-        initial_len = len(accounts[chat_id])
-        accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(userid)]
-        if len(accounts[chat_id]) < initial_len:
-            save_accounts(accounts)
-            return True
-    return False
 
 # ── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 def get_random_device_id(): return secrets.token_hex(8)
@@ -181,7 +154,7 @@ def parse_session_string(raw: str) -> dict:
 def get_cancel_button(uid=""): 
     return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data=f"cancel_task_{uid}")]])
 
-# ── FEATURE: SUPERFAST DISCOVER & LOOT ───────────────────────────────────────
+# ── SUPERFAST RAW ENGINE ─────────────────────────────────────────────────────
 async def discover_live_users(session_data: dict, lat: float, lng: float, client: aiohttp.ClientSession, seen: list):
     payload = {"location": {"latitude": lat, "longitude": lng}, "tid": str(session_data.get("tid", "")), "previousNearbyUserIds": seen or [], "campaignId": DEFAULT_CAMPAIGN_ID, "userId": str(session_data.get("userid", "")), "isFreshLocation": True}
     try:
@@ -206,51 +179,44 @@ async def invite_live_user(session_data: dict, user: dict, lat: float, lng: floa
 async def run_10_live_users_loot(session_data: dict, status_msg, context: ContextTypes.DEFAULT_TYPE):
     uid = session_data.get("userid", "default")
     
-    # 🌟 MULTI-ACCOUNT ISOLATION
+    # Isolation
     context.user_data.setdefault("running_tasks", {})[uid] = True
     context.user_data.setdefault("cancel_requests", {})[uid] = False
 
     joined_count, fail_count, tried_ids, summary_lines = 0, 0, set(), []
-    
     active_areas = list(ALL_AREAS)
-    random.shuffle(active_areas)
-    
-    last_update_time = 0
+    last_ui_update = 0
 
     try:
         async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
             while joined_count < TARGET_SUCCESS_COUNT:
                 if context.user_data.get("cancel_requests", {}).get(uid): break
                 
-                for i in range(0, len(active_areas), 8):
+                random.shuffle(active_areas)
+                
+                for i in range(0, len(active_areas), 5):
                     if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
-                    batch = active_areas[i:i+8]
+                    batch = active_areas[i:i+5]
                     
-                    if time.time() - last_update_time > 2.0:
+                    now = time.time()
+                    if now - last_ui_update > 1.5:
                         try:
-                            zones = ", ".join(set([b[0].split(" - ")[0] for b in batch[:2]]))
+                            zones = ", ".join([b[0].split(" - ")[0] for b in batch[:2]])
                             await status_msg.edit_text(
-                                f"✦ *Loot Engine Running* ({uid}) ✦\n\n"
+                                f"✦ *Loot Engine Running* (`{uid}`) ✦\n\n"
                                 f"📍 *Scanning:* `{zones}...`\n"
                                 f"✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n"
                                 f"❌ *Bypassed:* `{fail_count}`\n"
                                 f"📡 *Scanned:* `{len(tried_ids)}`",
                                 reply_markup=get_cancel_button(uid), parse_mode="Markdown"
                             )
-                            last_update_time = time.time()
+                            last_ui_update = now
                         except: pass
 
-                    # DYNAMIC JITTER
-                    jitter_tasks = []
-                    for city_data in batch:
-                        j_lat = city_data[1] + random.uniform(-0.035, 0.035)
-                        j_lng = city_data[2] + random.uniform(-0.035, 0.035)
-                        jitter_tasks.append((city_data[0], j_lat, j_lng))
-
-                    tasks = [discover_live_users(session_data, jl, jlg, client, list(tried_ids)) for _, jl, jlg in jitter_tasks]
+                    tasks = [discover_live_users(session_data, lat, lng, client, list(tried_ids)) for _, lat, lng in batch]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    for (city, j_lat, j_lng), res in zip(jitter_tasks, results):
+                    for (city, lat, lng), res in zip(batch, results):
                         if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
                         if isinstance(res, Exception) or not res[0]: continue
 
@@ -265,7 +231,7 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                                 fail_count += 1
                                 continue
 
-                            ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
+                            ok, note = await invite_live_user(session_data, u, lat, lng, client)
                             if ok:
                                 joined_count += 1
                                 summary_lines.append(f"✅ `{name}`")
@@ -278,13 +244,12 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
     except Exception as e: summary_lines.append(f"⚠️ Error: {str(e)}")
     finally: context.user_data.setdefault("running_tasks", {})[uid] = False
 
-    final_msg = "🛑 *Operation Aborted*\n\n" if context.user_data.get("cancel_requests", {}).get(uid) else f"🏆 *Loot Completed for `{uid}`!*\n\n"
+    final_msg = "🛑 *Operation Aborted*\n\n" if context.user_data.get("cancel_requests", {}).get(uid) else f"🏆 *Loot Completed for {uid}!*\n\n"
     final_msg += "\n".join(summary_lines[:15]) + f"\n\n✅ *Total Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n✧ *crafted by shivansh* ✧"
     
     try: await status_msg.edit_text(final_msg, parse_mode="Markdown")
     except: pass
     
-    # 🎯 AUTO-PROMPT FOR NEXT LOGIN ON COMPLETION
     if joined_count >= TARGET_SUCCESS_COUNT and not context.user_data.get("cancel_requests", {}).get(uid):
         try:
             next_msg = (
@@ -293,7 +258,6 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
             )
             await context.bot.send_message(chat_id=status_msg.chat_id, text=next_msg, reply_markup=show_login_choice_markup(), parse_mode="Markdown")
         except: pass
-
 
 # ── TELEGRAM HANDLERS ────────────────────────────────────────────────────────
 def get_main_reply_keyboard():
