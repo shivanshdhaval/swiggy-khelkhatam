@@ -60,24 +60,43 @@ SWIGGY_APP_HEADERS = {
     "model-name": "MOTO G(60)",
 }
 
-# Core Fast Zones
+# 🚀 ULTRA-DENSE FOOD HUBS (Students, IT Parks, Busy Markets)
 ALL_AREAS = [
+    ("Delhi - Mukherjee Nagar", 28.7112, 77.2153),
     ("Delhi - CP", 28.6315, 77.2167),
-    ("Delhi - Saket", 28.5245, 77.2066),
-    ("Delhi - Karol Bagh", 28.6519, 77.1909),
+    ("Delhi - Rajouri Garden", 28.6415, 77.1198),
+    ("Delhi - Hauz Khas", 28.5433, 77.2066),
+    ("Delhi - Laxmi Nagar", 28.6300, 77.2430),
     ("Noida - Sec 18", 28.5698, 77.3200),
+    ("Noida - Sec 62", 28.6208, 77.3639),
     ("Gurgaon - CyberHub", 28.4950, 77.0895),
     ("Bengaluru - Koramangala", 12.9352, 77.6245),
+    ("Bengaluru - BTM Layout", 12.9166, 77.6101),
     ("Bengaluru - Indiranagar", 12.9784, 77.6408),
     ("Bengaluru - HSR", 12.9121, 77.6446),
+    ("Bengaluru - Marathahalli", 12.9569, 77.7011),
+    ("Bengaluru - Whitefield", 12.9698, 77.7499),
     ("Mumbai - Bandra", 19.0596, 72.8295),
     ("Mumbai - Andheri", 19.1136, 72.8697),
+    ("Mumbai - Powai", 19.1176, 72.9060),
+    ("Mumbai - Lower Parel", 18.9953, 72.8286),
     ("Pune - Hinjewadi", 18.5912, 73.7389),
     ("Pune - Viman Nagar", 18.5679, 73.9143),
+    ("Pune - Kothrud", 18.5074, 73.8077),
+    ("Hyderabad - Madhapur", 17.4483, 78.3915),
     ("Hyderabad - Hitec City", 17.4435, 78.3772),
+    ("Hyderabad - Ameerpet", 17.4375, 78.4482),
+    ("Hyderabad - Kukatpally", 17.4849, 78.3976),
     ("Chennai - T Nagar", 13.0418, 80.2341),
+    ("Chennai - Velachery", 12.9815, 80.2180),
     ("Kolkata - Park Street", 22.5526, 88.3539),
+    ("Kolkata - Salt Lake", 22.5864, 88.4006),
     ("Ahmedabad - SG Highway", 23.0225, 72.5714),
+    ("Jaipur - Malviya Nagar", 26.9124, 75.7873),
+    ("Lucknow - Gomti Nagar", 26.8467, 80.9462),
+    ("Chandigarh - Sector 17", 30.7333, 76.7794),
+    ("Indore - Bhawar Kuan", 22.6953, 75.8715),
+    ("Patna - Boring Road", 25.6093, 85.1158),
 ]
 
 # ── SAVED ACCOUNTS SYSTEM ────────────────────────────────────────────────────
@@ -102,6 +121,17 @@ def add_saved_account(chat_id, session_data):
     accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(session_data.get("userid"))]
     accounts[chat_id].append(session_data)
     save_accounts(accounts)
+
+def remove_saved_account(chat_id, userid):
+    chat_id = str(chat_id)
+    accounts = load_accounts()
+    if chat_id in accounts:
+        initial_len = len(accounts[chat_id])
+        accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(userid)]
+        if len(accounts[chat_id]) < initial_len:
+            save_accounts(accounts)
+            return True
+    return False
 
 # ── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
 def get_random_device_id(): return secrets.token_hex(8)
@@ -154,11 +184,12 @@ def parse_session_string(raw: str) -> dict:
 def get_cancel_button(uid=""): 
     return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data=f"cancel_task_{uid}")]])
 
-# ── SUPERFAST RAW ENGINE ─────────────────────────────────────────────────────
+# ── ULTRAFAST DISCOVER & LOOT ENGINE ─────────────────────────────────────────
 async def discover_live_users(session_data: dict, lat: float, lng: float, client: aiohttp.ClientSession, seen: list):
     payload = {"location": {"latitude": lat, "longitude": lng}, "tid": str(session_data.get("tid", "")), "previousNearbyUserIds": seen or [], "campaignId": DEFAULT_CAMPAIGN_ID, "userId": str(session_data.get("userid", "")), "isFreshLocation": True}
     try:
-        async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=5) as resp:
+        # Reduced timeout for faster failure & moving on to next area
+        async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=4) as resp:
             data = await resp.json(content_type=None)
             users = (data.get("data") or {}).get("nearbyUsers", [])
             return [u for u in users if isinstance(u, dict)], None
@@ -167,7 +198,7 @@ async def discover_live_users(session_data: dict, lat: float, lng: float, client
 async def invite_live_user(session_data: dict, user: dict, lat: float, lng: float, client: aiohttp.ClientSession):
     payload = {"campaignId": DEFAULT_CAMPAIGN_ID, "senderUserId": str(session_data.get("userid", "")), "senderLocation": {"latitude": lat, "longitude": lng}, "receivers": [{"userId": str(user.get("userId") or ""), "userName": str(user.get("userName") or "")}]}
     try:
-        async with client.post(SPNS_BASE_URL + CREATE_OFFERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=5) as resp:
+        async with client.post(SPNS_BASE_URL + CREATE_OFFERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=4) as resp:
             data = await resp.json(content_type=None)
             for res in ((data.get("data") or {}).get("receiverResults") or []):
                 for bl, offer in (res.get("offersByBL") or {}).items():
@@ -194,17 +225,18 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                 
                 random.shuffle(active_areas)
                 
-                for i in range(0, len(active_areas), 5):
+                # BATCH SIZE INCREASED TO 10 FOR MAX CONCURRENCY
+                for i in range(0, len(active_areas), 10):
                     if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
-                    batch = active_areas[i:i+5]
+                    batch = active_areas[i:i+10]
                     
                     now = time.time()
                     if now - last_ui_update > 1.5:
                         try:
                             zones = ", ".join([b[0].split(" - ")[0] for b in batch[:2]])
                             await status_msg.edit_text(
-                                f"✦ *Loot Engine Running* (`{uid}`) ✦\n\n"
-                                f"📍 *Scanning:* `{zones}...`\n"
+                                f"⚡ *UltraFast Engine Running* (`{uid}`) ⚡\n\n"
+                                f"📍 *Radar:* `{zones}...`\n"
                                 f"✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n"
                                 f"❌ *Bypassed:* `{fail_count}`\n"
                                 f"📡 *Scanned:* `{len(tried_ids)}`",
@@ -213,10 +245,17 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                             last_ui_update = now
                         except: pass
 
-                    tasks = [discover_live_users(session_data, lat, lng, client, list(tried_ids)) for _, lat, lng in batch]
+                    # 🎯 MICRO-JITTER: Move only 1-1.5 KM instead of 3-4 KM to stay INSIDE the busy markets
+                    jitter_tasks = []
+                    for city_data in batch:
+                        j_lat = city_data[1] + random.uniform(-0.012, 0.012)
+                        j_lng = city_data[2] + random.uniform(-0.012, 0.012)
+                        jitter_tasks.append((city_data[0], j_lat, j_lng))
+
+                    tasks = [discover_live_users(session_data, jl, jlg, client, list(tried_ids)) for _, jl, jlg in jitter_tasks]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    for (city, lat, lng), res in zip(batch, results):
+                    for (city, j_lat, j_lng), res in zip(jitter_tasks, results):
                         if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
                         if isinstance(res, Exception) or not res[0]: continue
 
@@ -231,16 +270,16 @@ async def run_10_live_users_loot(session_data: dict, status_msg, context: Contex
                                 fail_count += 1
                                 continue
 
-                            ok, note = await invite_live_user(session_data, u, lat, lng, client)
+                            ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
                             if ok:
                                 joined_count += 1
-                                summary_lines.append(f"✅ `{name}`")
+                                summary_lines.append(f"✅ `{name}` ({city.split(' - ')[0]})")
                             else:
                                 fail_count += 1
 
-                            await asyncio.sleep(0.05)
+                            await asyncio.sleep(0.02) # Faster iteration
                 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.2) # Reduced delay between batches
     except Exception as e: summary_lines.append(f"⚠️ Error: {str(e)}")
     finally: context.user_data.setdefault("running_tasks", {})[uid] = False
 
