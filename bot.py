@@ -1,20 +1,7 @@
 import os
-import time
 import asyncio
-import base64
-import json
-import re
-import secrets
-import random
-import aiohttp
 import aiohttp.web
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-)
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -26,7 +13,7 @@ from telegram.ext import (
 
 # ── RENDER HEALTHCHECK SERVER (PORT BINDING) ─────────────────────────────────
 async def health_check(request):
-    return aiohttp.web.Response(text="Bot is ALIVE and RUNNING 24/7!")
+    return aiohttp.web.Response(text="Bot is ALIVE and RUNNING 24/7 (Offer Closed)")
 
 async def start_web_server():
     app = aiohttp.web.Application()
@@ -41,414 +28,38 @@ async def start_web_server():
 # ── BOT CONFIG ───────────────────────────────────────────────────────────────
 BOT_TOKEN = "8918993850:AAG-svWDI3GFH1b0cDuozIH-UHlvvgj1QWY"
 
-SMS_OTP_URL = "https://profile.swiggy.com/api/v3/app/sms_otp"
-VERIFY_URL = "https://profile.swiggy.com/api/v3/app/login/verify"
-SPNS_BASE_URL = "https://spns.swiggy.com"
-CREATE_OFFERS_PATH = "/api/v1/proximity-offer/create-offers"
-DISCOVER_USERS_PATH = "/api/v1/proximity-offer/discover-users"
-
-DEFAULT_CAMPAIGN_ID = "ydiHi75"
-TARGET_SUCCESS_COUNT = 12
-
-SWIGGY_APP_HEADERS = {
-    "user-agent": "Swiggy-Android",
-    "content-type": "application/json; charset=utf-8",
-    "accept": "application/json; charset=utf-8",
-    "version-code": "1795",
-    "app-version": "4.113.0",
-    "manufacturer": "MOTOROLA",
-    "model-name": "MOTO G(60)",
-}
-
-# 🚀 ULTRA-DENSE FOOD HUBS (Students, IT Parks, Busy Markets)
-ALL_AREAS = [
-    ("Delhi - Mukherjee Nagar", 28.7112, 77.2153),
-    ("Delhi - CP", 28.6315, 77.2167),
-    ("Delhi - Rajouri Garden", 28.6415, 77.1198),
-    ("Delhi - Hauz Khas", 28.5433, 77.2066),
-    ("Delhi - Laxmi Nagar", 28.6300, 77.2430),
-    ("Noida - Sec 18", 28.5698, 77.3200),
-    ("Noida - Sec 62", 28.6208, 77.3639),
-    ("Gurgaon - CyberHub", 28.4950, 77.0895),
-    ("Bengaluru - Koramangala", 12.9352, 77.6245),
-    ("Bengaluru - BTM Layout", 12.9166, 77.6101),
-    ("Bengaluru - Indiranagar", 12.9784, 77.6408),
-    ("Bengaluru - HSR", 12.9121, 77.6446),
-    ("Bengaluru - Marathahalli", 12.9569, 77.7011),
-    ("Bengaluru - Whitefield", 12.9698, 77.7499),
-    ("Mumbai - Bandra", 19.0596, 72.8295),
-    ("Mumbai - Andheri", 19.1136, 72.8697),
-    ("Mumbai - Powai", 19.1176, 72.9060),
-    ("Mumbai - Lower Parel", 18.9953, 72.8286),
-    ("Pune - Hinjewadi", 18.5912, 73.7389),
-    ("Pune - Viman Nagar", 18.5679, 73.9143),
-    ("Pune - Kothrud", 18.5074, 73.8077),
-    ("Hyderabad - Madhapur", 17.4483, 78.3915),
-    ("Hyderabad - Hitec City", 17.4435, 78.3772),
-    ("Hyderabad - Ameerpet", 17.4375, 78.4482),
-    ("Hyderabad - Kukatpally", 17.4849, 78.3976),
-    ("Chennai - T Nagar", 13.0418, 80.2341),
-    ("Chennai - Velachery", 12.9815, 80.2180),
-    ("Kolkata - Park Street", 22.5526, 88.3539),
-    ("Kolkata - Salt Lake", 22.5864, 88.4006),
-    ("Ahmedabad - SG Highway", 23.0225, 72.5714),
-    ("Jaipur - Malviya Nagar", 26.9124, 75.7873),
-    ("Lucknow - Gomti Nagar", 26.8467, 80.9462),
-    ("Chandigarh - Sector 17", 30.7333, 76.7794),
-    ("Indore - Bhawar Kuan", 22.6953, 75.8715),
-    ("Patna - Boring Road", 25.6093, 85.1158),
-]
-
-# ── SAVED ACCOUNTS SYSTEM ────────────────────────────────────────────────────
-ACCOUNTS_FILE = "saved_accounts.json"
-
-def load_accounts():
-    if os.path.exists(ACCOUNTS_FILE):
-        try:
-            with open(ACCOUNTS_FILE, "r") as f: return json.load(f)
-        except: pass
-    return {}
-
-def save_accounts(data):
-    try:
-        with open(ACCOUNTS_FILE, "w") as f: json.dump(data, f, indent=4)
-    except: pass
-
-def add_saved_account(chat_id, session_data):
-    chat_id = str(chat_id)
-    accounts = load_accounts()
-    if chat_id not in accounts: accounts[chat_id] = []
-    accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(session_data.get("userid"))]
-    accounts[chat_id].append(session_data)
-    save_accounts(accounts)
-
-def remove_saved_account(chat_id, userid):
-    chat_id = str(chat_id)
-    accounts = load_accounts()
-    if chat_id in accounts:
-        initial_len = len(accounts[chat_id])
-        accounts[chat_id] = [acc for acc in accounts[chat_id] if str(acc.get("userid")) != str(userid)]
-        if len(accounts[chat_id]) < initial_len:
-            save_accounts(accounts)
-            return True
-    return False
-
-# ── HELPER FUNCTIONS ─────────────────────────────────────────────────────────
-def get_random_device_id(): return secrets.token_hex(8)
-
-def _decode_tid_payload(tid: str) -> dict:
-    try:
-        parts = tid.split(".")
-        if len(parts) < 2: return {}
-        return json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (4 - len(parts[1]) % 4)).decode("utf-8"))
-    except: return {}
-
-def _userid_from_tid(tid: str): return str(_decode_tid_payload(tid).get("user_id") or "")
-
-def build_spns_headers(session_data: dict) -> dict:
-    return {
-        "Content-Type": "application/json",
-        "user-agent": SWIGGY_APP_HEADERS["user-agent"],
-        "platform": "Swiggy-Android",
-        "versionCode": SWIGGY_APP_HEADERS["version-code"],
-        "tid": str(session_data.get("tid", "")),
-        "token": str(session_data.get("token", "")),
-        "userId": str(session_data.get("userid", "")),
-    }
-
-def parse_session_string(raw: str) -> dict:
-    cleaned = re.sub(r"^```[a-zA-Z]*\n?|```\s*$", "", raw.strip()).strip()
-    session = {}
-    try:
-        data = json.loads(cleaned)
-        sources = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
-        if isinstance(data, dict) and isinstance(data.get("data"), dict): sources.append(data.get("data"))
-        for src in sources:
-            if isinstance(src, dict):
-                for k in ("token", "tid", "sid", "userid", "phone"):
-                    if k in src and k not in session: session[k] = src[k]
-                if "token" not in session and src.get("access_token"): session["token"] = src["access_token"]
-            elif isinstance(src, list):
-                for header in src:
-                    if isinstance(header, dict) and str(header.get("name", "")).lower() in ("token", "tid", "sid", "userid", "phone"):
-                        session[str(header.get("name", "")).lower()] = header.get("value", "")
-    except: pass
-    if not session:
-        for key in ("token", "tid", "sid", "userid", "phone"):
-            m = re.search(r'["\']?' + key + r'["\']?\s*[:=]\s*["\']?([^"\'\s,}]+)', cleaned, re.IGNORECASE)
-            if m: session[key] = m.group(1)
-    if not session.get("token") and not session.get("tid"): raise ValueError("Invalid Session")
-    session["userid"] = str(session.get("userid") or _userid_from_tid(session.get("tid", "")))
-    return session
-
-def get_cancel_button(uid=""): 
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Stop / Cancel", callback_data=f"cancel_task_{uid}")]])
-
-# ── ULTRAFAST DISCOVER & LOOT ENGINE ─────────────────────────────────────────
-async def discover_live_users(session_data: dict, lat: float, lng: float, client: aiohttp.ClientSession, seen: list):
-    payload = {"location": {"latitude": lat, "longitude": lng}, "tid": str(session_data.get("tid", "")), "previousNearbyUserIds": seen or [], "campaignId": DEFAULT_CAMPAIGN_ID, "userId": str(session_data.get("userid", "")), "isFreshLocation": True}
-    try:
-        # Reduced timeout for faster failure & moving on to next area
-        async with client.post(SPNS_BASE_URL + DISCOVER_USERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=4) as resp:
-            data = await resp.json(content_type=None)
-            users = (data.get("data") or {}).get("nearbyUsers", [])
-            return [u for u in users if isinstance(u, dict)], None
-    except Exception as e: return [], str(e)
-
-async def invite_live_user(session_data: dict, user: dict, lat: float, lng: float, client: aiohttp.ClientSession):
-    payload = {"campaignId": DEFAULT_CAMPAIGN_ID, "senderUserId": str(session_data.get("userid", "")), "senderLocation": {"latitude": lat, "longitude": lng}, "receivers": [{"userId": str(user.get("userId") or ""), "userName": str(user.get("userName") or "")}]}
-    try:
-        async with client.post(SPNS_BASE_URL + CREATE_OFFERS_PATH, headers=build_spns_headers(session_data), json=payload, timeout=4) as resp:
-            data = await resp.json(content_type=None)
-            for res in ((data.get("data") or {}).get("receiverResults") or []):
-                for bl, offer in (res.get("offersByBL") or {}).items():
-                    if str(offer.get("status") or "") == "SUCCESS": return True, "Success"
-                    elif str(offer.get("status") or "") == "FAILURE": return False, "Rejected"
-            return False, data.get("statusMessage") or "Inactive"
-    except Exception as e: return False, str(e)
-
-async def run_10_live_users_loot(session_data: dict, status_msg, context: ContextTypes.DEFAULT_TYPE):
-    uid = session_data.get("userid", "default")
-    
-    # Isolation
-    context.user_data.setdefault("running_tasks", {})[uid] = True
-    context.user_data.setdefault("cancel_requests", {})[uid] = False
-
-    joined_count, fail_count, tried_ids, summary_lines = 0, 0, set(), []
-    active_areas = list(ALL_AREAS)
-    last_ui_update = 0
-
-    try:
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
-            while joined_count < TARGET_SUCCESS_COUNT:
-                if context.user_data.get("cancel_requests", {}).get(uid): break
-                
-                random.shuffle(active_areas)
-                
-                # BATCH SIZE INCREASED TO 10 FOR MAX CONCURRENCY
-                for i in range(0, len(active_areas), 10):
-                    if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
-                    batch = active_areas[i:i+10]
-                    
-                    now = time.time()
-                    if now - last_ui_update > 1.5:
-                        try:
-                            zones = ", ".join([b[0].split(" - ")[0] for b in batch[:2]])
-                            await status_msg.edit_text(
-                                f"⚡ *UltraFast Engine Running* (`{uid}`) ⚡\n\n"
-                                f"📍 *Radar:* `{zones}...`\n"
-                                f"✅ *Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n"
-                                f"❌ *Bypassed:* `{fail_count}`\n"
-                                f"📡 *Scanned:* `{len(tried_ids)}`",
-                                reply_markup=get_cancel_button(uid), parse_mode="Markdown"
-                            )
-                            last_ui_update = now
-                        except: pass
-
-                    # 🎯 MICRO-JITTER: Move only 1-1.5 KM instead of 3-4 KM to stay INSIDE the busy markets
-                    jitter_tasks = []
-                    for city_data in batch:
-                        j_lat = city_data[1] + random.uniform(-0.012, 0.012)
-                        j_lng = city_data[2] + random.uniform(-0.012, 0.012)
-                        jitter_tasks.append((city_data[0], j_lat, j_lng))
-
-                    tasks = [discover_live_users(session_data, jl, jlg, client, list(tried_ids)) for _, jl, jlg in jitter_tasks]
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                    for (city, j_lat, j_lng), res in zip(jitter_tasks, results):
-                        if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
-                        if isinstance(res, Exception) or not res[0]: continue
-
-                        new_users = [u for u in res[0] if str(u.get("userId", "")) not in tried_ids]
-                        
-                        for u in new_users:
-                            if joined_count >= TARGET_SUCCESS_COUNT or context.user_data.get("cancel_requests", {}).get(uid): break
-                            userid_target, name = str(u.get("userId") or ""), str(u.get("userName") or "User")
-                            tried_ids.add(userid_target)
-
-                            if (u.get("status") or {}).get("isAssociated"):
-                                fail_count += 1
-                                continue
-
-                            ok, note = await invite_live_user(session_data, u, j_lat, j_lng, client)
-                            if ok:
-                                joined_count += 1
-                                summary_lines.append(f"✅ `{name}` ({city.split(' - ')[0]})")
-                            else:
-                                fail_count += 1
-
-                            await asyncio.sleep(0.02) # Faster iteration
-                
-                await asyncio.sleep(0.2) # Reduced delay between batches
-    except Exception as e: summary_lines.append(f"⚠️ Error: {str(e)}")
-    finally: context.user_data.setdefault("running_tasks", {})[uid] = False
-
-    final_msg = "🛑 *Operation Aborted*\n\n" if context.user_data.get("cancel_requests", {}).get(uid) else f"🏆 *Loot Completed for {uid}!*\n\n"
-    final_msg += "\n".join(summary_lines[:15]) + f"\n\n✅ *Total Successful:* `{joined_count}/{TARGET_SUCCESS_COUNT}`\n✧ *crafted by shivansh* ✧"
-    
-    try: await status_msg.edit_text(final_msg, parse_mode="Markdown")
-    except: pass
-    
-    if joined_count >= TARGET_SUCCESS_COUNT and not context.user_data.get("cancel_requests", {}).get(uid):
-        try:
-            next_msg = (
-                f"✅ **Is account (`{uid}`) ka 12 limit pura ho gaya!** 🎉\n\n"
-                "👉 **Naye account pe automatically loot shuru karne ke liye niche 'Request OTP' dabayein, ya direct naya 10-digit Number chat me bhejein:**"
-            )
-            await context.bot.send_message(chat_id=status_msg.chat_id, text=next_msg, reply_markup=show_login_choice_markup(), parse_mode="Markdown")
-        except: pass
-
 # ── TELEGRAM HANDLERS ────────────────────────────────────────────────────────
-def get_main_reply_keyboard():
-    return ReplyKeyboardMarkup([["⚡ Free Cash Loot (12 Users)"], ["📱 Authentication", "📁 Saved Accounts"]], resize_keyboard=True)
-
-def show_login_choice_markup():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📱 Request OTP", callback_data="login_phone_opt")],
-        [InlineKeyboardButton("⚙️ Inject JSON", callback_data="login_json_opt")],
-        [InlineKeyboardButton("💾 Saved Accounts", callback_data="login_saved_opt")]
-    ])
-
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = "✦ *SWIGGY TURBO LOOT* ✦\n✧ *crafted by shivansh* ✧\n━━━━━━━━━━━━━━━━━━━━\n\nPlease select an option:"
-    await (update.message or update.callback_query.message).reply_text(msg, reply_markup=get_main_reply_keyboard(), parse_mode="Markdown")
+    msg = (
+        "✦ *SWIGGY TURBO LOOT* ✦\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "⚠️ *Update:* The Swiggy Free Cash campaign has officially ended. The API slots are closed and the offer is no longer active.\n\n"
+        "Thank you for using the bot!"
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = "⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive."
+    await update.message.reply_text(msg)
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
-    chat_id = str(update.effective_chat.id)
-
-    if query.data.startswith("cancel_task_"):
-        uid = query.data.replace("cancel_task_", "")
-        if uid:
-            context.user_data.setdefault("cancel_requests", {})[uid] = True
-        else:
-            for k in context.user_data.get("running_tasks", {}):
-                context.user_data.setdefault("cancel_requests", {})[k] = True
-        await query.answer("🛑 Terminating operation...", show_alert=True)
-        return
-
-    if query.data == "login_saved_opt":
-        accounts = load_accounts().get(chat_id, [])
-        if not accounts: return await query.message.reply_text("⚠️ No saved accounts found.")
-        kb = [[InlineKeyboardButton(f"👤 {acc.get('phone', acc.get('userid'))}", callback_data=f"use_acc_{acc.get('userid')}")] for acc in accounts]
-        return await query.message.reply_text("💾 *Select a Saved Account:*", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    if query.data.startswith("use_acc_"):
-        uid = query.data.replace("use_acc_", "")
-        acc = next((a for a in load_accounts().get(chat_id, []) if str(a.get("userid")) == uid), None)
-        if not acc: return await query.message.reply_text("❌ Account not found.")
-        
-        context.user_data["swiggy_session"] = acc
-        await query.message.edit_text(f"🔓 *Switched to Account:*\n👤 *User ID:* `{uid}`\n⚡ *Auto-starting Loot...*", parse_mode="Markdown")
-        
-        if context.user_data.get("running_tasks", {}).get(uid): 
-            await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Loot is already running for account `{uid}`.")
-            return
-        status = await context.bot.send_message(chat_id=chat_id, text=f"⚡ *Initializing Live Loot Engine* ~ *shivansh*...", reply_markup=get_cancel_button(uid), parse_mode="Markdown")
-        asyncio.create_task(run_10_live_users_loot(acc, status, context))
-        return
-
-    if query.data == "login_phone_opt":
-        context.user_data["state"] = "awaiting_phone"
-        await query.message.reply_text("📱 Enter 10-digit registered number:")
-    elif query.data == "login_json_opt":
-        context.user_data["state"] = "awaiting_json"
-        await query.message.reply_text("⚙️ Paste your Swiggy session JSON block:")
-
-async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (update.message.text or "").strip()
-    state = context.user_data.get("state")
-    session = context.user_data.get("swiggy_session")
-    chat_id = str(update.effective_chat.id)
-
-    if text == "📁 Saved Accounts":
-        accounts = load_accounts().get(chat_id, [])
-        if not accounts: return await update.message.reply_text("⚠️ No saved accounts found.")
-        kb = [[InlineKeyboardButton(f"👤 {a.get('phone', a.get('userid'))}", callback_data=f"use_acc_{a.get('userid')}")] for a in accounts]
-        return await update.message.reply_text("📁 *Saved Accounts:*", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
-
-    if text == "⚡ Free Cash Loot (12 Users)":
-        if not session: return await update.message.reply_text("🔒 *Login Required*", reply_markup=show_login_choice_markup(), parse_mode="Markdown")
-        uid = session.get("userid")
-        if context.user_data.get("running_tasks", {}).get(uid): 
-            return await update.message.reply_text(f"⚠️ Loot is already running for account `{uid}`.\nPlease wait or stop it first.")
-        
-        status = await update.message.reply_text(f"⚡ *Initializing Live Loot Engine* ({uid})...", reply_markup=get_cancel_button(uid), parse_mode="Markdown")
-        asyncio.create_task(run_10_live_users_loot(session, status, context))
-        return
-
-    if text == "📱 Authentication":
-        return await update.message.reply_text("🔐 Login method:", reply_markup=show_login_choice_markup())
-
-    if (text.startswith("{") and text.endswith("}")) or '"token"' in text or state == "awaiting_json":
-        try:
-            parsed = parse_session_string(text)
-            context.user_data["swiggy_session"] = parsed
-            context.user_data.pop("state", None)
-            add_saved_account(chat_id, parsed)
-            uid = parsed.get("userid")
-            
-            await update.message.reply_text(f"🔓 *Authentication Successful & Saved!*\n👤 *User ID:* `{uid}`\n⚡ *Auto-starting Loot...*", reply_markup=get_main_reply_keyboard(), parse_mode="Markdown")
-            
-            if context.user_data.get("running_tasks", {}).get(uid): return
-            status = await update.message.reply_text(f"⚡ *Initializing Live Loot Engine* ({uid})...", reply_markup=get_cancel_button(uid), parse_mode="Markdown")
-            asyncio.create_task(run_10_live_users_loot(parsed, status, context))
-            return
-        except Exception as e: return await update.message.reply_text(f"❌ JSON Error: {str(e)}")
-
-    if state == "awaiting_phone" or (re.fullmatch(r"\d{10}", text) and not context.user_data.get("temp_auth")):
-        phone = re.sub(r"\D", "", text)[-10:]
-        dev_id = get_random_device_id()
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
-            try:
-                async with client.get(f"{SMS_OTP_URL}?mobile={phone}", headers={**SWIGGY_APP_HEADERS, "deviceId": dev_id, "swuid": dev_id}) as resp:
-                    data = await resp.json()
-                    if data.get("statusCode") == 0:
-                        context.user_data["temp_auth"] = {"phone": phone, "tid": data.get("tid"), "sid": data.get("sid"), "dev_id": dev_id}
-                        context.user_data["state"] = "awaiting_otp"
-                        await update.message.reply_text(f"📩 OTP Sent to `+91{phone}`. Enter it below:", parse_mode="Markdown")
-                    else: await update.message.reply_text(f"❌ OTP Failed: {data.get('statusMessage')}")
-            except Exception as e: await update.message.reply_text(f"❌ Network Error: {str(e)}")
-        return
-
-    temp = context.user_data.get("temp_auth")
-    if temp and (state == "awaiting_otp" or re.fullmatch(r"\d{4,6}", text)):
-        headers = {**SWIGGY_APP_HEADERS, "deviceId": temp["dev_id"], "swuid": temp["dev_id"], "sid": str(temp["sid"]), "Tid": str(temp["tid"])}
-        payload = {"cloningSignalsData": {"appFilesDirPathInvalid": 0, "developerModeEnabled": 1, "deviceModelVmos": 0, "emulatorStatus": 0, "packageName": "in.swiggy.android", "workProfileEnabled": 0}, "otp": text.strip()}
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as client:
-            try:
-                async with client.post(f"{VERIFY_URL}?otp_source=Sms-automatic", headers=headers, json=payload) as resp:
-                    data = await resp.json()
-                    if data.get("statusCode") == 0:
-                        inner = data.get("data") or {}
-                        tid, token = data.get("tid") or inner.get("tid"), inner.get("token") or inner.get("accessToken")
-                        parsed = {"userid": str(_decode_tid_payload(tid).get("user_id")), "token": token, "tid": tid, "sid": temp["sid"], "phone": temp["phone"]}
-                        context.user_data["swiggy_session"] = parsed
-                        context.user_data.pop("temp_auth", None); context.user_data.pop("state", None)
-                        add_saved_account(chat_id, parsed)
-                        uid = parsed['userid']
-                        
-                        await update.message.reply_text(f"🔓 *Login Successful!*\n👤 *ID:* `{uid}`\n⚡ *Auto-starting Loot...*", reply_markup=get_main_reply_keyboard(), parse_mode="Markdown")
-                        
-                        if context.user_data.get("running_tasks", {}).get(uid): return
-                        status = await update.message.reply_text(f"⚡ *Initializing Live Loot Engine* ({uid})...", reply_markup=get_cancel_button(uid), parse_mode="Markdown")
-                        asyncio.create_task(run_10_live_users_loot(parsed, status, context))
-                    else: await update.message.reply_text(f"❌ Login Failed: {data.get('statusMessage')}")
-            except Exception as e: await update.message.reply_text(f"❌ Error: {str(e)}")
-        return
+    await query.answer("⚠️ Offer has ended.", show_alert=True)
+    await query.message.reply_text("⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive.")
 
 def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    # Handlers for all interactions
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CallbackQueryHandler(handle_buttons))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_messages))
 
     loop.create_task(start_web_server())
-    print("🤖 Swiggy Turbo Bot is running...")
+    print("🤖 Swiggy Loot Bot (Closed Status) is running...")
     app.run_polling()
 
 if __name__ == "__main__":
