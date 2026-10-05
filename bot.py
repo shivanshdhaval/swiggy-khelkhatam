@@ -32,20 +32,24 @@ BOT_TOKEN = "8918993850:AAG-svWDI3GFH1b0cDuozIH-UHlvvgj1QWY"
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "✦ *SWIGGY TURBO LOOT* ✦\n"
+        "✧ *crafted by shivansh* ✧\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "⚠️ *Update:* The Swiggy Free Cash campaign has officially ended. The API slots are closed and the offer is no longer active.\n\n"
         "Thank you for using the bot!"
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    # Agar message callback query se aaya hai toh wahan reply karein, warna normal message pe
+    target_msg = update.message if update.message else update.callback_query.message
+    await target_msg.reply_text(msg, parse_mode="Markdown")
 
 async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = "⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive."
-    await update.message.reply_text(msg)
+    msg = "⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive.\n\n✧ *crafted by shivansh* ✧"
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def handle_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("⚠️ Offer has ended.", show_alert=True)
-    await query.message.reply_text("⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive.")
+    msg = "⚠️ The Swiggy Free Cash offer has ended. This bot is currently inactive.\n\n✧ *crafted by shivansh* ✧"
+    await query.message.reply_text(msg, parse_mode="Markdown")
 
 def main():
     loop = asyncio.new_event_loop()
